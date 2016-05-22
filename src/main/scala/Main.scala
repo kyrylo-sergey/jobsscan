@@ -40,27 +40,27 @@ object Main extends App {
 
 object Adapter {
 
-  val adapters = List(new YCombinator(5))
+  val adapters = List(new YCombinator(20))
 
   def all: Future[List[URL]] = Future.fold(adapters.map(_.getCandidateLinks().map(_._1)))(List.empty[URL]) { _ ::: _ }
 }
 
 trait Adapter {
   protected val startingPoint: URL
-  protected val maxPages: Int = 5
+  protected val maxPages: Int
 
-  def getCandidateLinks(from: URL = startingPoint, currentPage: Int = 1): Future[(List[URL], Int)] =
+  def getCandidateLinks(from: URL = startingPoint, currentPage: Int = 1): Future[(List[URL], Int)] = {
+    def loop(url: URL, candidates: List[URL]) = Future.fold(List(getCandidateLinks(url, currentPage + 1)))( (candidates, currentPage) ) { case (l1, l2) =>
+        (l1._1 ::: l2._1, currentPage)
+      }
+    
     extractLinksFrom(from) flatMap {
       case (candidates: List[URL], nextPage: Option[URL]) =>
         nextPage.flatMap { url: URL =>
-          if (currentPage < maxPages) {
-            println(currentPage)
-            Some(Future.fold(List(getCandidateLinks(url, currentPage + 1)))( (candidates, currentPage) ) { case (l1, l2) =>
-              (l1._1 ::: l2._1, currentPage)
-            })
-          } else None
+          if (currentPage < maxPages) Some(loop(url, candidates)) else None
         } getOrElse { Future successful( (candidates, currentPage)) }
     }
+  }
 
   private def extractLinksFrom(location: URL): Future[(List[URL], Option[URL])] = {
     Future {

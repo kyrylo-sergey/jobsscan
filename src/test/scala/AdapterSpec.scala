@@ -31,6 +31,7 @@ class AdapterSpec extends Specification with Mockito {
         case _ => page2
       }
     }
+
     protected def nextPage(doc: Document): Option[URL] = pageCall match {
       case 0 => Some(url1)
       case 1 => Some(url1)
