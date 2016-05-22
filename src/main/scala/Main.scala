@@ -3,7 +3,7 @@ import net.ruippeixotog.scalascraper.model.Document
 import java.net.URL
 import scala.concurrent.Future
 import scala.util.Success
-import net.ruippeixotog.scalascraper.browser.JsoupBrowser
+import net.ruippeixotog.scalascraper.browser.{ JsoupBrowser, Browser }
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import scala.language.postfixOps
@@ -42,30 +42,33 @@ object Adapter {
 
   val adapters = List(new YCombinator(5))
 
-  def all: Future[List[URL]] = Future.fold(adapters.map(_.getCandidateLinks()))(List.empty[URL]) { _ ::: _ }
+  def all: Future[List[URL]] = Future.fold(adapters.map(_.getCandidateLinks().map(_._1)))(List.empty[URL]) { _ ::: _ }
 }
 
 trait Adapter {
   protected val startingPoint: URL
   protected val maxPages: Int = 5
-  private var currentPages: Int = 0
 
-  def getCandidateLinks(from: URL = startingPoint): Future[List[URL]] =
+  def getCandidateLinks(from: URL = startingPoint, currentPage: Int = 1): Future[(List[URL], Int)] =
     extractLinksFrom(from) flatMap {
       case (candidates: List[URL], nextPage: Option[URL]) =>
-        println(currentPages + " <= " + maxPages)
-        currentPages += 1
-        if (nextPage.isDefined && currentPages <= maxPages) {
-          Future.fold(List(getCandidateLinks(nextPage.get)))(candidates)(_ ::: _)
-        } else Future successful candidates
+        nextPage.flatMap { url: URL =>
+          if (currentPage < maxPages) {
+            println(currentPage)
+            Some(Future.fold(List(getCandidateLinks(url, currentPage + 1)))( (candidates, currentPage) ) { case (l1, l2) =>
+              (l1._1 ::: l2._1, currentPage)
+            })
+          } else None
+        } getOrElse { Future successful( (candidates, currentPage)) }
     }
 
   private def extractLinksFrom(location: URL): Future[(List[URL], Option[URL])] = {
     Future {
-      JsoupBrowser().get(location.toString())
+      Try { getBrowserInstance.get(location.toString()) } toOption
     }
-  } map { doc: Document => (doExctractLinks(doc), nextPage(doc)) }
+  } map { docOpt: Option[Document] => docOpt.map { doc: Document => (doExctractLinks(doc), nextPage(doc)) } getOrElse { (List.empty, None)}}
 
+  protected def getBrowserInstance: Browser = JsoupBrowser()
   protected def doExctractLinks(doc: Document): List[URL]
   protected def nextPage(doc: Document): Option[URL]
 }
