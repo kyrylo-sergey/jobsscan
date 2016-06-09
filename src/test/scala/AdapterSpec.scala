@@ -44,12 +44,12 @@ class AdapterSpec extends Specification with Mockito {
   "adapter instance should" >> {
     "must iterate over pages" in {
       val a = new MyAdapter()
-      Await.result(a getCandidateLinks(), 1 second)._1 must be_==(page1 ++ page2)
+      Await.result(a candidates, 1 second) must be_==(page1 ++ page2)
     }
 
     "should not iterate for more pages than parametrized" in {
       val a = new MyAdapter(1)
-      Await.result(a getCandidateLinks(), 1 second)._1 must be_==(page1)
+      Await.result(a candidates, 1 second) must be_==(page1)
     }
 
   }
