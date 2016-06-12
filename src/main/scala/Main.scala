@@ -71,7 +71,7 @@ class SimpleScanner(search: String) extends Scanner {
 
 object Adapter {
 
-  def adapters(keyword: String) = List(new YCombinator(20), new Rabotaua(20, keyword))
+  def adapters(keyword: String) = List(new YCombinator(20), new Rabotaua(20, keyword), new Stackoverflow(20, keyword))
 
   def all(keyword: String): Future[Set[URL]] = Future.fold(adapters(keyword).map(_.candidates))(List.empty[URL])(_ ::: _) map { _.toSet }
 }
@@ -144,5 +144,24 @@ class Rabotaua(override val maxPages: Int, val keyword: String) extends Adapter 
 
   override def nextPage(doc: Document) =
     doc >?> element("a#beforeContentZone_vacancyList_gridList_linkNext") map { h => new URL(domain + h.attr("href")) }
+
+}
+
+class Stackoverflow(override val maxPages: Int, val keyword: String) extends Adapter {
+
+  val domain = "http://stackoverflow.com"
+  override protected val startingPoint = new URL(domain + "/jobs?allowsremote=true&searchTerm=" + keyword)
+
+  override protected def doExtractLinks(doc: Document): List[URL] = for {
+    title <- doc >> elementList("h1 a.job-link")
+    link <- title >?> attr("href")("a")
+    url <- Try { new URL(link) } toOption
+  } yield url
+
+  override def nextPage(doc: Document) = {
+    val links = (doc >?> elementList(".pagination a") last)
+
+    Try { links.map( h => new URL(domain + h.attr("href")) ).head } toOption
+  }
 
 }
