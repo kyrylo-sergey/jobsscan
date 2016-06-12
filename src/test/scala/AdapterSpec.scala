@@ -23,7 +23,7 @@ class AdapterSpec extends Specification with Mockito {
 
     var pageCall = 0
 
-    override protected def doExctractLinks(doc: Document): List[URL] = {
+    override protected def doExtractLinks(doc: Document): List[URL] = {
       pageCall += 1
       pageCall match {
         case 1 => page1
