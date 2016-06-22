@@ -1,4 +1,5 @@
-import scala.concurrent.ExecutionContext.Implicits._
+import java.util.concurrent.Executors
+import scala.concurrent.ExecutionContext
 import net.ruippeixotog.scalascraper.model.Document
 import java.net.URL
 import scala.concurrent.Future
@@ -11,12 +12,16 @@ import scala.util.Try
 import scala.concurrent.duration._
 import scala.concurrent._
 import scala._
+import Adapter.ec
+//import scala.concurrent.ExecutionContext.Implicits._
 
 object Main extends App {
 
   val keyword: String = "Scala"
 
-  val list: Set[Future[URL]] = Scanner.scan(keyword, Await.result(Adapter.all(keyword), 1 hour))
+  //val list: Set[Future[URL]] = Scanner.scan(keyword, Await.result(Adapter.all(keyword), 1 hour))
+
+  val list = Await.result(Adapter.allChecked("Scala"), 1 hour)
 
   list foreach { f =>
     f.onComplete {
@@ -25,7 +30,7 @@ object Main extends App {
     }
   }
 
-  def futureToFutureTry[T](f: Future[T]): Future[Try[T]] =
+ def futureToFutureTry[T](f: Future[T]): Future[Try[T]] =
     f.map(Success(_)).recover { case t: Throwable => Failure(t) }
 
   val f = Future.sequence(list.map(futureToFutureTry(_)))
@@ -37,7 +42,7 @@ object Main extends App {
       case Success(l) => println(s"In total found ${l.toSet.size} links")
       case Failure(_) => {}
     }
-  }
+ }
 }
 
 object Scanner {
@@ -71,16 +76,25 @@ class SimpleScanner(search: String) extends Scanner {
 
 object Adapter {
 
+  implicit val ec: ExecutionContext = ExecutionContext.fromExecutorService(Executors.newWorkStealingPool(100))
+
   def adapters(keyword: String) = List(new YCombinator(20), new Rabotaua(20, keyword), new Stackoverflow(20, keyword))
 
   def all(keyword: String): Future[Set[URL]] = Future.fold(adapters(keyword).map(_.candidates))(List.empty[URL])(_ ::: _) map { _.toSet }
+
+  def allChecked(keyword: String): Future[Set[Future[URL]]] =
+    Future.fold(adapters(keyword).map(_.checked))(Set.empty[Future[URL]])(_ union _)
 }
 
 trait Adapter {
   protected val startingPoint: URL
   protected val maxPages: Int
+  val scanner = new SimpleScanner("Scala")
 
-  def candidates: Future[List[URL]] = getCandidateLinks() map { _._1 }
+  def checked: Future[Set[Future[URL]]] =
+    candidates map { _.toSet } map { scanner.scan }
+
+  def candidates: Future[List[URL]] = getCandidateLinks() map { _._1  }
 
   private def getCandidateLinks(from: URL = startingPoint, currentPage: Int = 1): Future[(List[URL], Int)] = {
     def loop(url: URL, candidates: List[URL]) =
