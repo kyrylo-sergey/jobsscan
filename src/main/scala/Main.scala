@@ -1,45 +1,28 @@
-import java.util.concurrent.Executors
-import akka.http.scaladsl.model.ws.Message
-import akka.http.scaladsl.model.ws.BinaryMessage
-import akka.http.scaladsl.model.ws.TextMessage
-import akka.stream.scaladsl.Flow
-import akka.http.scaladsl.model.ws.UpgradeToWebSocket
-import scala.concurrent.ExecutionContext
-import net.ruippeixotog.scalascraper.model.Document
 import java.net.URL
-import scala.concurrent.Future
-import scala.util.{Failure, Success}
-import net.ruippeixotog.scalascraper.browser.{JsoupBrowser, Browser}
-import net.ruippeixotog.scalascraper.dsl.DSL._
-import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
+import java.util.concurrent.Executors
+
+import scala._
+import scala.concurrent._
+import scala.io.StdIn
 import scala.language.postfixOps
 import scala.util.Try
-import scala.concurrent.duration._
-import scala.concurrent._
-import scala._
+
 import Adapter.ec
-//import scala.concurrent.ExecutionContext.Implicits._
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.HttpMethods._
 import akka.http.scaladsl.model._
-import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.Sink
-import akka.stream.scaladsl.Source
-import akka.stream.scaladsl
-
+import akka.http.scaladsl.model.HttpMethods._
+import akka.http.scaladsl.model.ws.{UpgradeToWebSocket, TextMessage, Message, BinaryMessage}
+import akka.http.scaladsl.server.Directives
+import akka.stream.{scaladsl, ActorMaterializer}
+import akka.stream.scaladsl.{Source, Sink, Flow}
+import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
+import net.ruippeixotog.scalascraper.dsl.DSL._
+import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
+import net.ruippeixotog.scalascraper.model.Document
 
 object Main extends App {
 
-  def weboscketHandler: Flow[Message, Message, Any] =
-    Flow[Message].mapConcat {
-      case tm: TextMessage =>
-        TextMessage(Source.single("Hello ") ++ tm.textStream ++ Source.single("!")) :: Nil
-      case bm: BinaryMessage =>
-        // ignore binary messages but drain content to avoid the stream being clogged
-        bm.dataStream.runWith(Sink.ignore)
-        Nil
-    }
   /*  val keyword: String = "Scala"
 
   //val list: Set[Future[URL]] = Scanner.scan(keyword, Await.result(Adapter.all(keyword), 1 hour))
@@ -71,9 +54,31 @@ object Main extends App {
   implicit val materializer = ActorMaterializer()
   implicit val executionContext = system.dispatcher
 
-  val serverSource = Http().bind(interface = "localhost", port = 8080)
+  def weboscketHandler: Flow[Message, Message, Any] =
+    Flow[Message].mapConcat {
+      case tm: TextMessage =>
+        TextMessage(Source.single("Hello ") ++ tm.textStream ++ Source.single("!")) :: Nil
+      case bm: BinaryMessage =>
+        // ignore binary messages but drain content to avoid the stream being clogged
+        bm.dataStream.runWith(Sink.ignore)
+        Nil
+    }
 
-  val requestHandler: HttpRequest => HttpResponse = {
+  import Directives._
+
+  val route = get {
+    pathEndOrSingleSlash {
+      complete("Welcome to websocket server")
+    }
+  } ~
+    path("ws-echo") {
+      get {
+        handleWebSocketMessages(weboscketHandler)
+      }
+    }
+
+  // low level API
+  /*val requestHandler: HttpRequest => HttpResponse = {
     case HttpRequest(GET, Uri.Path("/"), _, _, _) =>
       HttpResponse(entity = HttpEntity(
         ContentTypes.`text/html(UTF-8)`,
@@ -88,18 +93,18 @@ object Main extends App {
     case r: HttpRequest =>
       r.discardEntityBytes()
       HttpResponse(404, entity = "Unknown resource!")
-  }
+  }*/
+
+  val bindingFuture = Http().bindAndHandle(route, interface = "localhost", port = 8080)
 
   println("Server started 🚀 ")
+  println("Press RETURN to stop...")
+  StdIn.readLine() // let it run until user presses return
 
-  val bindingFuture: Future[Http.ServerBinding] =
-    serverSource.to(Sink.foreach { connection =>
-      println("Accepted new connection from " + connection.remoteAddress)
+  bindingFuture
+    .flatMap(_.unbind()) // trigger unbinding from the port
+    .onComplete(_ => system.terminate())
 
-      connection handleWithSyncHandler requestHandler
-      // this is equivalent to
-      // connection handleWith { Flow[HttpRequest] map requestHandler }
-    }).run()
 }
 
 object Scanner {
