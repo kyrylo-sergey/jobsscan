@@ -1,4 +1,9 @@
 import java.util.concurrent.Executors
+import akka.http.scaladsl.model.ws.Message
+import akka.http.scaladsl.model.ws.BinaryMessage
+import akka.http.scaladsl.model.ws.TextMessage
+import akka.stream.scaladsl.Flow
+import akka.http.scaladsl.model.ws.UpgradeToWebSocket
 import scala.concurrent.ExecutionContext
 import net.ruippeixotog.scalascraper.model.Document
 import java.net.URL
@@ -14,10 +19,28 @@ import scala.concurrent._
 import scala._
 import Adapter.ec
 //import scala.concurrent.ExecutionContext.Implicits._
+import akka.actor.ActorSystem
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.HttpMethods._
+import akka.http.scaladsl.model._
+import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.Sink
+import akka.stream.scaladsl.Source
+import akka.stream.scaladsl
+
 
 object Main extends App {
 
-  val keyword: String = "Scala"
+  def weboscketHandler: Flow[Message, Message, Any] =
+    Flow[Message].mapConcat {
+      case tm: TextMessage =>
+        TextMessage(Source.single("Hello ") ++ tm.textStream ++ Source.single("!")) :: Nil
+      case bm: BinaryMessage =>
+        // ignore binary messages but drain content to avoid the stream being clogged
+        bm.dataStream.runWith(Sink.ignore)
+        Nil
+    }
+  /*  val keyword: String = "Scala"
 
   //val list: Set[Future[URL]] = Scanner.scan(keyword, Await.result(Adapter.all(keyword), 1 hour))
 
@@ -42,7 +65,41 @@ object Main extends App {
       case Success(l) => println(s"In total found ${l.toSet.size} links")
       case Failure(_) => {}
     }
- }
+ }*/
+
+  implicit val system = ActorSystem()
+  implicit val materializer = ActorMaterializer()
+  implicit val executionContext = system.dispatcher
+
+  val serverSource = Http().bind(interface = "localhost", port = 8080)
+
+  val requestHandler: HttpRequest => HttpResponse = {
+    case HttpRequest(GET, Uri.Path("/"), _, _, _) =>
+      HttpResponse(entity = HttpEntity(
+        ContentTypes.`text/html(UTF-8)`,
+        "<html><body>Hello world!</body></html>"
+      ))
+
+    case req @ HttpRequest(GET, Uri.Path("/data"), _, _, _) =>
+      req.header[UpgradeToWebSocket] match {
+        case Some(upgrade) => upgrade.handleMessages(weboscketHandler)
+        case None => HttpResponse(400, entity = "Not a valid websocket request!")
+      }
+    case r: HttpRequest =>
+      r.discardEntityBytes()
+      HttpResponse(404, entity = "Unknown resource!")
+  }
+
+  println("Server started 🚀 ")
+
+  val bindingFuture: Future[Http.ServerBinding] =
+    serverSource.to(Sink.foreach { connection =>
+      println("Accepted new connection from " + connection.remoteAddress)
+
+      connection handleWithSyncHandler requestHandler
+      // this is equivalent to
+      // connection handleWith { Flow[HttpRequest] map requestHandler }
+    }).run()
 }
 
 object Scanner {
@@ -94,14 +151,14 @@ trait Adapter {
   def checked: Future[Set[Future[URL]]] =
     candidates map { _.toSet } map { scanner.scan }
 
-  def candidates: Future[List[URL]] = getCandidateLinks() map { _._1  }
+  def candidates: Future[List[URL]] = getCandidateLinks() map { _._1 }
 
   private def getCandidateLinks(from: URL = startingPoint, currentPage: Int = 1): Future[(List[URL], Int)] = {
     def loop(url: URL, candidates: List[URL]) =
       Future.fold(List(getCandidateLinks(url, currentPage + 1)))((candidates, currentPage)) {
         case (l1, l2) => {
           (l1._1 ::: l2._1, currentPage)
-          }
+        }
       }
 
     extractLinksFrom(from) flatMap {
@@ -175,7 +232,7 @@ class Stackoverflow(override val maxPages: Int, val keyword: String) extends Ada
   override def nextPage(doc: Document) = {
     val links = (doc >?> elementList(".pagination a") last)
 
-    Try { links.map( h => new URL(domain + h.attr("href")) ).head } toOption
+    Try { links.map(h => new URL(domain + h.attr("href"))).head } toOption
   }
 
 }
