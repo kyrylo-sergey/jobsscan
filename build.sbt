@@ -3,7 +3,9 @@ scalaVersion in ThisBuild := "2.11.8"
 lazy val jobsscan = crossProject.in(file(".")).
   settings(
     name := "jobsscan",
-    version := "0.1-SNAPSHOT"
+    version := "0.1-SNAPSHOT",
+    publish := {},
+    publishLocal := {}
   ).
   jvmSettings(
     libraryDependencies ++= Seq(
@@ -11,7 +13,8 @@ lazy val jobsscan = crossProject.in(file(".")).
       "com.typesafe.akka" %% "akka-http-experimental" % "2.4.9-RC1",
       "org.specs2" %% "specs2-core" % "3.8.3" % "test",
       "org.specs2" %% "specs2-mock" % "3.8.3" % "test"
-    )).
+    )
+  ).
   jsSettings(
     libraryDependencies ++= Seq(
       "org.scala-js" %%% "scalajs-dom" % "0.9.0"
