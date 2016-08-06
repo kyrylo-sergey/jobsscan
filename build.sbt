@@ -17,7 +17,8 @@ lazy val jobsscan = crossProject.in(file(".")).
   ).
   jsSettings(
     libraryDependencies ++= Seq(
-      "org.scala-js" %%% "scalajs-dom" % "0.9.0"
+      "org.scala-js" %%% "scalajs-dom" % "0.9.0",
+      "com.lihaoyi" %%% "upickle" % "0.4.1"
     )
   )
 
