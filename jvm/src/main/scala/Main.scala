@@ -5,7 +5,9 @@ import scala._
 import scala.concurrent._
 import scala.io.StdIn
 import scala.language.postfixOps
-import scala.util.Try
+import scala.util.{Try, Success, Failure}
+import scala.concurrent.duration._
+import scala.concurrent._
 
 import Adapter.ec
 import akka.actor.ActorSystem
@@ -56,8 +58,24 @@ object Main extends App {
 
   def weboscketHandler: Flow[Message, Message, Any] =
     Flow[Message].mapConcat {
-      case tm: TextMessage =>
-        TextMessage(Source.single("Hello ") ++ tm.textStream ++ Source.single("!")) :: Nil
+      case tm: TextMessage => {
+        println("started")
+        val list = Await.result(Adapter.allChecked("Scala"), 1 hour)
+
+        list foreach { f =>
+          f.onComplete {
+            case Success(url) => println(url)
+            case Failure(t) => //println(t)
+          }
+        }
+
+        def futureToFutureTry[T](f: Future[T]): Future[Try[T]] =
+          f map(Success(_)) recover { case t: Throwable => Failure(t) }
+
+        val f = list.map(futureToFutureTry(_))
+
+        f map { f => TextMessage(Source.fromFuture(f map { _.toString() })) }
+      }
       case bm: BinaryMessage =>
         // ignore binary messages but drain content to avoid the stream being clogged
         bm.dataStream.runWith(Sink.ignore)
