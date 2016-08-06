@@ -33,5 +33,21 @@ object Client extends JSApp {
       global.console.log(e)
       appendPar(document.body, e.data.toString())
     }
+
+    document.addEventListener("DOMContentLoaded", { (e: dom.Event) =>
+      val searchBox = document.getElementById("search-box") match {
+        case (elem: HTMLInputElement) =>
+          elem
+        case elem =>
+          val err = s"expected HTMLInputElement, got $elem"
+          global.console.error(err)
+          throw new RuntimeException(err)
+      }
+      val searchBtn = document.getElementById("search-btn")
+
+      searchBtn.addEventListener("click", { (mouseEvent: dom.Event) =>
+        global.console.log(searchBox.value)
+      }, false)
+    });
   }
 }
