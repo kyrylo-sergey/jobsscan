@@ -3,7 +3,7 @@ import org.scalajs.dom
 import org.scalajs.dom.raw._
 import scala.scalajs.js.Dynamic.global
 import dom.document
-import proto._
+import upickle.default._
 
 object Client extends JSApp {
   private final val WSServer = "ws://localhost:8080/ws-echo"
@@ -17,7 +17,6 @@ object Client extends JSApp {
 
   def main(): Unit = {
     appendPar(document.body, "Hello World")
-    appendPar(document.body, SuccessfulCandidate("http://www.example.com").toString())
 
     val socket = new WebSocket(WSServer)
 
@@ -32,7 +31,10 @@ object Client extends JSApp {
 
     socket.onmessage = (e: dom.MessageEvent) => {
       global.console.log(e)
-      appendPar(document.body, e.data.toString())
+      read(e.data.toString()) match {
+        case ("SuccessfulCandidate", url) => appendPar(document.body, e.data.toString())
+        case _ => {}
+      }
     }
 
     document.addEventListener("DOMContentLoaded", { (e: dom.Event) =>

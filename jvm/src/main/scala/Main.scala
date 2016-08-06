@@ -23,9 +23,6 @@ import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import net.ruippeixotog.scalascraper.model.Document
 import upickle._
-import upickle.default._
-
-import proto._
 
 object Main extends App {
 
@@ -73,10 +70,10 @@ object Main extends App {
           }
         }
 
-        def futureToFutureTry(f: Future[URL]): Future[ProtoMessage] =
-          f map { (u: URL) => SuccessfulCandidate(u.toString()) } recover { case t: Throwable => FailedCandidate(t.toString()) }
+        def futureToFutureTry(f: Future[URL]) =
+          f map { (u: URL) => ("SuccessfulCandidate", u.toString()) } recover { case t: Throwable => ("FailedCandidate", t.toString()) }
 
-        val f: Set[Future[String]] = list.map(futureToFutureTry(_)).map { f: Future[ProtoMessage] => f map { write(_) } }
+        val f: Set[Future[String]] = list.map(futureToFutureTry(_)).map { f => f map { default.write(_) } }
 
         f map { f: Future[String] => TextMessage(Source.fromFuture(f)) }
       }
