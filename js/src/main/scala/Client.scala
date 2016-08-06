@@ -21,16 +21,17 @@ object Client extends JSApp {
     val socket = new WebSocket(WSServer)
 
     socket.onopen = (e: scala.scalajs.js.Any) => {
-      global.console.log("Connected to WebSocket Server on " ++ WSServer)
+      global.console.log("Connected to WebSocket Server on " + WSServer)
       socket.send("search")
     }
 
     socket.onerror = (e: dom.ErrorEvent) => {
-      global.console.log("Error: " ++ e.toString())
+      global.console.log("Error: " + e.toString())
     }
 
     socket.onmessage = (e: dom.MessageEvent) => {
       global.console.log(e)
+      appendPar(document.body, e.data.toString())
     }
   }
 }
