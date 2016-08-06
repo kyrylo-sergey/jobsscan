@@ -25,8 +25,8 @@ object Client extends JSApp {
       socket.send("search")
     }
 
-    socket.onerror = (e: dom.ErrorEvent) => {
-      global.console.log("Error: " + e.toString())
+    socket.onerror = (e: dom.Event) => {
+      global.console.log("Error occurred:", e)
     }
 
     socket.onmessage = (e: dom.MessageEvent) => {
