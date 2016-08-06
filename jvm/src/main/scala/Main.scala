@@ -86,14 +86,15 @@ object Main extends App {
 
   val route = get {
     pathEndOrSingleSlash {
-      complete("Welcome to websocket server")
+      getFromFile("js/index.html")
     }
   } ~
     path("ws-echo") {
       get {
         handleWebSocketMessages(weboscketHandler)
       }
-    }
+    } ~
+    path("jobsscan-fastopt.js")(getFromFile("js/target/scala-2.11/jobsscan-fastopt.js"))
 
   // low level API
   /*val requestHandler: HttpRequest => HttpResponse = {
