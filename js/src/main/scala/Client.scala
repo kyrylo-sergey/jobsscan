@@ -3,6 +3,7 @@ import org.scalajs.dom
 import org.scalajs.dom.raw._
 import scala.scalajs.js.Dynamic.global
 import dom.document
+import proto._
 
 object Client extends JSApp {
   private final val WSServer = "ws://localhost:8080/ws-echo"

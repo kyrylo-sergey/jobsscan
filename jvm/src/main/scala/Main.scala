@@ -22,6 +22,10 @@ import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import net.ruippeixotog.scalascraper.model.Document
+import upickle._
+import upickle.default._
+
+import proto._
 
 object Main extends App {
 
@@ -69,12 +73,12 @@ object Main extends App {
           }
         }
 
-        def futureToFutureTry[T](f: Future[T]): Future[Try[T]] =
-          f map(Success(_)) recover { case t: Throwable => Failure(t) }
+        def futureToFutureTry(f: Future[URL]): Future[ProtoMessage] =
+          f map { (u: URL) => SuccessfulCandidate(u.toString()) } recover { case t: Throwable => FailedCandidate(t.toString()) }
 
-        val f = list.map(futureToFutureTry(_))
+        val f: Set[Future[String]] = list.map(futureToFutureTry(_)).map { f: Future[ProtoMessage] => f map { write(_) } }
 
-        f map { f => TextMessage(Source.fromFuture(f map { _.toString() })) }
+        f map { f: Future[String] => TextMessage(Source.fromFuture(f)) }
       }
       case bm: BinaryMessage =>
         // ignore binary messages but drain content to avoid the stream being clogged
