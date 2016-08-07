@@ -3,80 +3,58 @@ import java.util.concurrent.Executors
 
 import scala._
 import scala.concurrent._
+import scala.concurrent.duration._
 import scala.io.StdIn
 import scala.language.postfixOps
-import scala.util.{Try, Success, Failure}
-import scala.concurrent.duration._
-import scala.concurrent._
+import scala.util.Try
 
-import Adapter.ec
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.HttpMethods._
-import akka.http.scaladsl.model.ws.{UpgradeToWebSocket, TextMessage, Message, BinaryMessage}
+import akka.http.scaladsl.model.ws.{BinaryMessage, Message, TextMessage}
 import akka.http.scaladsl.server.Directives
-import akka.stream.{scaladsl, ActorMaterializer}
-import akka.stream.scaladsl.{Source, Sink, Flow}
+import akka.stream.{ActorMaterializer, scaladsl}
+import akka.stream.scaladsl.{Flow, Sink, Source}
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import net.ruippeixotog.scalascraper.model.Document
 import upickle._
 
+import Adapter.ec
+
 object Main extends App {
-
-  /*  val keyword: String = "Scala"
-
-  //val list: Set[Future[URL]] = Scanner.scan(keyword, Await.result(Adapter.all(keyword), 1 hour))
-
-  val list = Await.result(Adapter.allChecked("Scala"), 1 hour)
-
-  list foreach { f =>
-    f.onComplete {
-      case Success(url) => println(url)
-      case Failure(t) => //println(t)
-    }
-  }
-
- def futureToFutureTry[T](f: Future[T]): Future[Try[T]] =
-    f.map(Success(_)).recover { case t: Throwable => Failure(t) }
-
-  val f = Future.sequence(list.map(futureToFutureTry(_)))
-
-  Await.ready(f, 1 hour)
-
-  f.map { _.filter(_.isSuccess) } onComplete {
-    _ match {
-      case Success(l) => println(s"In total found ${l.toSet.size} links")
-      case Failure(_) => {}
-    }
- }*/
 
   implicit val system = ActorSystem()
   implicit val materializer = ActorMaterializer()
   implicit val executionContext = system.dispatcher
 
+  system.whenTerminated andThen { case f: Try[_] => println("Actor system have been terminated") }
+
   def weboscketHandler: Flow[Message, Message, Any] =
     Flow[Message].mapConcat {
       case tm: TextMessage => {
-        println("started")
-        val list = Await.result(Adapter.allChecked("Scala"), 1 hour)
 
-        list foreach { f =>
-          f.onComplete {
-            case Success(url) => println(url)
-            case Failure(t) => //println(t)
-          }
+        val keyword = "Scala"
+
+        println("Started searching for candidates")
+
+        // TODO: remove blocking
+        val listOfScannedLinks = Await.result(Adapter.allChecked(keyword), 1 hour)
+
+        println(s"Found ${listOfScannedLinks.size} candidates. Looking for $keyword in those")
+
+        def futureURLToJson(f: Future[URL]) = f
+          .map { (u: URL) => ("SuccessfulCandidate", u.toString()) }
+          .recover { case t: Throwable => ("FailedCandidate", t.toString()) }
+          .map { default.write(_) }
+
+        listOfScannedLinks map { f: Future[URL] =>
+          TextMessage(Source.fromFuture { futureURLToJson(f) })
         }
-
-        def futureToFutureTry(f: Future[URL]) =
-          f map { (u: URL) => ("SuccessfulCandidate", u.toString()) } recover { case t: Throwable => ("FailedCandidate", t.toString()) }
-
-        val f: Set[Future[String]] = list.map(futureToFutureTry(_)).map { f => f map { default.write(_) } }
-
-        f map { f: Future[String] => TextMessage(Source.fromFuture(f)) }
       }
+
       case bm: BinaryMessage =>
         // ignore binary messages but drain content to avoid the stream being clogged
         bm.dataStream.runWith(Sink.ignore)
@@ -96,24 +74,6 @@ object Main extends App {
       }
     } ~
     path("jobsscan-fastopt.js")(getFromFile("js/target/scala-2.11/jobsscan-fastopt.js"))
-
-  // low level API
-  /*val requestHandler: HttpRequest => HttpResponse = {
-    case HttpRequest(GET, Uri.Path("/"), _, _, _) =>
-      HttpResponse(entity = HttpEntity(
-        ContentTypes.`text/html(UTF-8)`,
-        "<html><body>Hello world!</body></html>"
-      ))
-
-    case req @ HttpRequest(GET, Uri.Path("/data"), _, _, _) =>
-      req.header[UpgradeToWebSocket] match {
-        case Some(upgrade) => upgrade.handleMessages(weboscketHandler)
-        case None => HttpResponse(400, entity = "Not a valid websocket request!")
-      }
-    case r: HttpRequest =>
-      r.discardEntityBytes()
-      HttpResponse(404, entity = "Unknown resource!")
-  }*/
 
   val bindingFuture = Http().bindAndHandle(route, interface = "localhost", port = 8080)
 
