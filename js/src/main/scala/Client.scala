@@ -31,8 +31,8 @@ object Client extends JSApp {
 
     socket.onmessage = (e: dom.MessageEvent) => {
       global.console.log(e)
-      read(e.data.toString()) match {
-        case ("SuccessfulCandidate", url) => appendPar(document.body, e.data.toString())
+      read[Tuple2[String, String]](e.data.toString()) match {
+        case ("SuccessfulCandidate", url) => appendPar(document.body, url.toString())
         case _ => {}
       }
     }
