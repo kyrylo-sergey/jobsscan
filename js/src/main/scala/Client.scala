@@ -8,17 +8,19 @@ import upickle.default._
 object Client extends JSApp {
   private final val WSServer = "ws://localhost:8080/ws-echo"
 
-  def appendPar(targetNode: dom.Node, text: String): Unit = {
-    val parNode = document.createElement("p")
-    val textNode = document.createTextNode(text)
-    parNode.appendChild(textNode)
-    targetNode.appendChild(parNode)
+  def appendCandidate(targetNode: dom.Node, url: String): Unit = {
+    val aNode = document.createElement("a")
+    aNode.setAttribute("href", url)
+    aNode.innerHTML = url
+    aNode.setAttribute("target", "_blank")
+
+    targetNode.appendChild(document.createElement("br"))
+    targetNode.appendChild(aNode)
   }
 
   def main(): Unit = {
-    appendPar(document.body, "Hello World")
-
     val socket = new WebSocket(WSServer)
+    val content = document.getElementById("content")
 
     socket.onopen = (e: scala.scalajs.js.Any) => {
       global.console.log("Connected to WebSocket Server on " + WSServer)
@@ -32,7 +34,7 @@ object Client extends JSApp {
     socket.onmessage = (e: dom.MessageEvent) => {
       global.console.log(e)
       read[Tuple2[String, String]](e.data.toString()) match {
-        case ("SuccessfulCandidate", url) => appendPar(document.body, url.toString())
+        case ("SuccessfulCandidate", url) => appendCandidate(content, url.toString())
         case _ => {}
       }
     }

@@ -5,7 +5,8 @@ lazy val jobsscan = crossProject.in(file(".")).
     name := "jobsscan",
     version := "0.1-SNAPSHOT",
     publish := {},
-    publishLocal := {}
+    publishLocal := {},
+    resolvers += "webjars" at "http://webjars.github.com/m2"
   ).
   jvmSettings(
     libraryDependencies ++= Seq(
@@ -19,7 +20,8 @@ lazy val jobsscan = crossProject.in(file(".")).
   jsSettings(
     libraryDependencies ++= Seq(
       "org.scala-js" %%% "scalajs-dom" % "0.9.0",
-      "com.lihaoyi" %%% "upickle" % "0.4.1"
+      "com.lihaoyi" %%% "upickle" % "0.4.1",
+      "org.webjars.bower" % "skeleton-css" % "2.0.4"
     )
   )
 

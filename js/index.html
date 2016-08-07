@@ -3,15 +3,30 @@
   <head>
     <meta charset="UTF-8">
     <title>JobsScan</title>
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/webjars/org.webjars.bower/skeleton-css/2.0.4/normalize.css" type="text/css">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/webjars/org.webjars.bower/skeleton-css/2.0.4/skeleton.css" type="text/css">
   </head>
   <body>
+    <div class="container">
+      <div class="row">
+        <div class="nine columns" id="header">
+          <h1>JobsScan</h1>
+          <em>a better way to find your job ~></em>
+        </div>
+      </div>
+      <div class="row">
+        <div class="nine columns" id="content">
+          <input id="search-box" type="text" name="search">
+          <input id="search-btn" type="submit" value="Search">
+        </div>
+      </div>
+    </div>
+
     <!-- Include Scala.js compiled code -->
     <script type="text/javascript" src="jobsscan-fastopt.js"></script>
     <!-- Run tutorial.webapp.TutorialApp -->
     <script type="text/javascript">
       new Client().main();
     </script>
-    <input id="search-box" type="text" name="search">
-    <input id="search-btn" type="submit" value="Search">
   </body>
 </html>
