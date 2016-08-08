@@ -20,11 +20,10 @@ object Client extends JSApp {
 
   def main(): Unit = {
     val socket = new WebSocket(WSServer)
-    val content = document.getElementById("content")
+    val links = document.getElementById("links")
 
     socket.onopen = (e: scala.scalajs.js.Any) => {
       global.console.log("Connected to WebSocket Server on " + WSServer)
-      socket.send("search")
     }
 
     socket.onerror = (e: dom.Event) => {
@@ -32,10 +31,10 @@ object Client extends JSApp {
     }
 
     socket.onmessage = (e: dom.MessageEvent) => {
-      global.console.log(e)
       read[Tuple2[String, String]](e.data.toString()) match {
-        case ("SuccessfulCandidate", url) => appendCandidate(content, url.toString())
-        case _ => {}
+        case ("SuccessfulCandidate", url) => appendCandidate(links, url)
+        case ("FailedCandidate", problem) => {}
+        case _ => global.console.error("unknown message", e)
       }
     }
 
@@ -51,7 +50,8 @@ object Client extends JSApp {
       val searchBtn = document.getElementById("search-btn")
 
       searchBtn.addEventListener("click", { (mouseEvent: dom.Event) =>
-        global.console.log(searchBox.value)
+        socket.send(write(("StartSearch", searchBox.value)))
+        links.innerHTML = ""
       }, false)
     });
   }

@@ -2,6 +2,8 @@ package proto
 
 sealed trait ProtoMessage
 
+case class NotSupported(op: String) extends ProtoMessage
+
 // [client ~> server] messages
 case class StartSearch(term: String) extends ProtoMessage
 

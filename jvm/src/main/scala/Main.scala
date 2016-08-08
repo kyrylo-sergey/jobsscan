@@ -23,6 +23,7 @@ import net.ruippeixotog.scalascraper.model.Document
 import upickle._
 
 import Adapter.ec
+import proto._
 
 object Main extends App {
 
@@ -32,34 +33,42 @@ object Main extends App {
 
   system.whenTerminated andThen { case f: Try[_] => println("Actor system have been terminated") }
 
-  def weboscketHandler: Flow[Message, Message, Any] =
-    Flow[Message].mapConcat {
-      case tm: TextMessage => {
-
-        val keyword = "Scala"
-
-        println("Started searching for candidates")
-
-        // TODO: remove blocking
-        val listOfScannedLinks = Await.result(Adapter.allChecked(keyword), 1 hour)
-
-        println(s"Found ${listOfScannedLinks.size} candidates. Looking for $keyword in those")
-
-        def futureURLToJson(f: Future[URL]) = f
-          .map { (u: URL) => ("SuccessfulCandidate", u.toString()) }
-          .recover { case t: Throwable => ("FailedCandidate", t.toString()) }
-          .map { default.write(_) }
-
-        listOfScannedLinks map { f: Future[URL] =>
-          TextMessage(Source.fromFuture { futureURLToJson(f) })
+  // TODO; handle streamed and binary messages
+  def protoMessageFlow: Flow[Message, ProtoMessage, akka.NotUsed] =
+    Flow[Message]
+      .collect { case TextMessage.Strict(msg) => msg }
+      .map { msg =>
+        default.read[(String, String)](msg) match {
+          case ("StartSearch", term) => StartSearch(term)
+          case _ => NotSupported(msg)
         }
       }
 
-      case bm: BinaryMessage =>
-        // ignore binary messages but drain content to avoid the stream being clogged
-        bm.dataStream.runWith(Sink.ignore)
-        Nil
-    }
+  def weboscketHandler: Flow[Message, Message, Any] =
+    Flow[Message]
+      .via(protoMessageFlow)
+      .mapConcat {
+        case StartSearch(keyword) => {
+
+          println("Started searching for candidates")
+
+          // TODO: remove blocking
+          val listOfScannedLinks = Await.result(Adapter.allChecked(keyword), 1 hour)
+
+          println(s"Found ${listOfScannedLinks.size} candidates. Looking for $keyword in those")
+
+          def futureURLToJson(f: Future[URL]) = f
+            .map { (u: URL) => ("SuccessfulCandidate", u.toString()) }
+            .recover { case t: Throwable => ("FailedCandidate", t.toString()) }
+            .map { default.write(_) }
+
+          listOfScannedLinks map { f: Future[URL] =>
+            TextMessage(Source.fromFuture { futureURLToJson(f) })
+          }
+        }
+        case NotSupported(msg) => List(TextMessage(Source.single(s"not supported message: $msg")))
+        case _ => List(TextMessage(Source.single("unknown message type")))
+      }
 
   import Directives._
 
