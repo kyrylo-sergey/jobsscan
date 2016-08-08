@@ -6,7 +6,7 @@ import scala.concurrent._
 import scala.concurrent.duration._
 import scala.io.StdIn
 import scala.language.postfixOps
-import scala.util.Try
+import scala.util.{Try, Success, Failure}
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
@@ -30,8 +30,6 @@ object Main extends App {
   implicit val system = ActorSystem()
   implicit val materializer = ActorMaterializer()
   implicit val executionContext = system.dispatcher
-
-  system.whenTerminated andThen { case f: Try[_] => println("Actor system have been terminated") }
 
   // TODO; handle streamed and binary messages
   def protoMessageFlow: Flow[Message, ProtoMessage, akka.NotUsed] =
@@ -86,14 +84,19 @@ object Main extends App {
 
   val bindingFuture = Http().bindAndHandle(route, interface = "localhost", port = 8080)
 
-  println("Server started 🚀 ")
-  println("Press RETURN to stop...")
-  StdIn.readLine() // let it run until user presses return
+  bindingFuture.onComplete {
+    case Success(binding) =>
+      val localAddress = binding.localAddress
+      println(s"🚀  Server is listening on ${localAddress.getHostName}:${localAddress.getPort}. Press RETURN to stop...")
+      StdIn.readLine() // let it run until user presses return
+      bindingFuture
+        .flatMap(_.unbind()) // trigger unbinding from the port
+        .onComplete(_ => system.terminate())
 
-  bindingFuture
-    .flatMap(_.unbind()) // trigger unbinding from the port
-    .onComplete(_ => system.terminate())
-
+    case Failure(e) =>
+      println(s"Binding failed with ${e.getMessage}")
+      system.shutdown()
+  }
 }
 
 object Scanner {
