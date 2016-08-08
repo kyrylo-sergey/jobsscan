@@ -44,7 +44,7 @@ object Main extends App {
         }
       }
 
-  def weboscketHandler: Flow[Message, Message, Any] =
+  def websocketHandler: Flow[Message, Message, Any] =
     Flow[Message]
       .via(protoMessageFlow)
       .mapConcat {
@@ -79,7 +79,7 @@ object Main extends App {
   } ~
     path("ws-echo") {
       get {
-        handleWebSocketMessages(weboscketHandler)
+        handleWebSocketMessages(websocketHandler)
       }
     } ~
     path("jobsscan-fastopt.js")(getFromFile("js/target/scala-2.11/jobsscan-fastopt.js"))
