@@ -1,4 +1,9 @@
 import java.net.URL
+import akka.NotUsed
+import akka.stream.SourceShape
+import akka.stream.scaladsl.Merge
+import akka.stream.scaladsl.GraphDSL
+import akka.stream.Graph
 import java.util.concurrent.Executors
 
 import scala._
@@ -15,7 +20,7 @@ import akka.http.scaladsl.model.HttpMethods._
 import akka.http.scaladsl.model.ws.{BinaryMessage, Message, TextMessage}
 import akka.http.scaladsl.server.Directives
 import akka.stream.{ActorMaterializer, scaladsl}
-import akka.stream.scaladsl.{Flow, Sink, Source}
+import scaladsl.{Flow, Sink, Source}
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
@@ -42,6 +47,30 @@ object Main extends App {
         }
       }
 
+  def candidatesSource(adapters: Adapter*): Source[URL, NotUsed] = Source.fromGraph {
+    GraphDSL.create() { implicit b =>
+      import GraphDSL.Implicits._
+
+      val mergeGraph = b.add(Merge[List[URL]](adapters.length))
+
+      val sources = adapters map { (a: Adapter) => Source.fromFuture(a.candidates) }
+
+      for (source <- sources) source ~> mergeGraph
+
+      SourceShape(mergeGraph.out)
+    }
+  } mapConcat { items: List[URL] => items }
+
+  def scanningMap(scanner: Scanner): Flow[URL, (String, String), NotUsed] =
+    Flow[URL].mapAsync(100) { u =>
+      Future {
+        if (scanner.isCandidateAcceptable(u)) ("SuccessfulCandidate", u.toString())
+        else ("FailedCandidate", u.toString())
+      } recover {
+        case t: Throwable => ("FailedCandidate", u.toString() + ": " + t.toString())
+      }
+    }
+
   def websocketHandler: Flow[Message, Message, Any] =
     Flow[Message]
       .via(protoMessageFlow)
@@ -50,19 +79,15 @@ object Main extends App {
 
           println("Started searching for candidates")
 
-          // TODO: remove blocking
-          val listOfScannedLinks = Await.result(Adapter.allChecked(keyword), 1 hour)
+          val source =
+            candidatesSource(new YCombinator(5), new Rabotaua(1, keyword), new Stackoverflow(1, keyword))
+              .via { scanningMap(new SimpleScanner(keyword)) }
+              .map { default.write(_) }
 
-          println(s"Found ${listOfScannedLinks.size} candidates. Looking for $keyword in those")
+          val items = Await.result(source runWith (Sink.seq), 1 hour)
+          println(s"Found ${items.size} candidates. Looking for $keyword in those")
 
-          def futureURLToJson(f: Future[URL]) = f
-            .map { (u: URL) => ("SuccessfulCandidate", u.toString()) }
-            .recover { case t: Throwable => ("FailedCandidate", t.toString()) }
-            .map { default.write(_) }
-
-          listOfScannedLinks map { f: Future[URL] =>
-            TextMessage(Source.fromFuture { futureURLToJson(f) })
-          }
+          items map { TextMessage(_) }
         }
         case NotSupported(msg) => List(TextMessage(Source.single(s"not supported message: $msg")))
         case _ => List(TextMessage(Source.single("unknown message type")))
@@ -118,13 +143,13 @@ trait Scanner {
     }
   }
 
-  protected def isCandidateAcceptable(candidate: URL): Boolean
+  def isCandidateAcceptable(candidate: URL): Boolean
 }
 
 class SimpleScanner(search: String) extends Scanner {
   override val searchCriteria = search
 
-  override protected def isCandidateAcceptable(canidate: URL) =
+  override def isCandidateAcceptable(canidate: URL) =
     JsoupBrowser().get(canidate.toString()).body.innerHtml.contains(searchCriteria)
 }
 
@@ -132,7 +157,7 @@ object Adapter {
 
   implicit val ec: ExecutionContext = ExecutionContext.fromExecutorService(Executors.newWorkStealingPool(100))
 
-  def adapters(keyword: String) = List(new YCombinator(20), new Rabotaua(20, keyword), new Stackoverflow(20, keyword))
+  def adapters(keyword: String) = List(new YCombinator(5), new Rabotaua(1, keyword), new Stackoverflow(1, keyword))
 
   def all(keyword: String): Future[Set[URL]] = Future.fold(adapters(keyword).map(_.candidates))(List.empty[URL])(_ ::: _) map { _.toSet }
 
