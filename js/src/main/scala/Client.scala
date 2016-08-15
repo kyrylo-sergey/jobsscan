@@ -1,6 +1,7 @@
 import scala.scalajs.js.JSApp
 import org.scalajs.dom
 import org.scalajs.dom.raw._
+import org.scalajs.jquery.{jQuery => JQ}
 import scala.scalajs.js.Dynamic.global
 import dom.document
 import upickle.default._
@@ -55,4 +56,35 @@ object Client extends JSApp {
       }, false)
     });
   }
+}
+
+object Progress {
+
+  private def jqnode = JQ("#links")
+
+  def isShown = jqnode.find("#progress").length == 1
+  def isDeterminate = jqnode.find("div.determinate").length == 1
+  def isIndeterminate = !isDeterminate
+
+  def show = jqnode.append("""
+    <div class="progress" id="progress">
+      <div class="indeterminate"></div>
+    </div>
+    """.stripMargin)
+
+  def progress(amount: Int) = {
+    assert(amount <= 100)
+
+    val progress = jqnode.find("#progress").children().first()
+
+    if (isShown) {
+      if (isIndeterminate) {
+        progress.removeClass("indeterminate").addClass("determinate")
+      }
+
+      progress.attr("style", s"width: $amount%")
+    }
+  }
+
+  def remove = if (isShown) jqnode.find("#progress").remove()
 }
