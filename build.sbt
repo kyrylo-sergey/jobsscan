@@ -18,10 +18,15 @@ lazy val jobsscan = crossProject.in(file(".")).
     )
   ).
   jsSettings(
+    skip in packageJSDependencies := false,
     libraryDependencies ++= Seq(
       "org.scala-js" %%% "scalajs-dom" % "0.9.0",
       "com.lihaoyi" %%% "upickle" % "0.4.1",
-      "org.webjars.bower" % "skeleton-css" % "2.0.4"
+      "be.doeraene" %%% "scalajs-jquery" % "0.9.0"
+    ),
+    jsDependencies ++= Seq(
+      "org.webjars" % "jquery" % "3.1.0" / "3.1.0/dist/jquery.min.js",
+      "org.webjars.bower" % "materialize" % "0.97.6" / "0.97.6/dist/js/materialize.min.js" dependsOn "dist/jquery.min.js"
     )
   )
 

@@ -72,7 +72,8 @@ object Main extends App {
         handleWebSocketMessages(websocketHandler)
       }
     } ~
-    path("jobsscan-fastopt.js")(getFromFile("js/target/scala-2.11/jobsscan-fastopt.js"))
+    path("jobsscan-fastopt.js")(getFromFile("js/target/scala-2.11/jobsscan-fastopt.js")) ~
+    path("jobsscan-deps.js")(getFromFile("js/target/scala-2.11/jobsscan-jsdeps.js"))
 
   val bindingFuture = Http().bindAndHandle(route, interface = "localhost", port = 8080)
 

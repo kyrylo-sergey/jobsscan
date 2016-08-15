@@ -3,29 +3,36 @@
   <head>
     <meta charset="UTF-8">
     <title>JobsScan</title>
-    <link rel="stylesheet" href="//cdn.jsdelivr.net/webjars/org.webjars.bower/skeleton-css/2.0.4/normalize.css" type="text/css">
-    <link rel="stylesheet" href="//cdn.jsdelivr.net/webjars/org.webjars.bower/skeleton-css/2.0.4/skeleton.css" type="text/css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.97.7/css/materialize.min.css">
   </head>
   <body>
     <div class="container">
       <div class="row">
-        <div class="nine columns" id="header">
-          <h1>JobsScan</h1>
-          <em>a better way to find your job ~></em>
+        <div class="col s9" id="header">
+          <div class="row">
+            <h1>JobsScan</h1>
+            <h6 class="col s5">a better way to find your job ~></h6>
+          </div>
         </div>
       </div>
       <div class="row">
-        <div class="nine columns" id="content">
-          <input id="search-box" type="text" name="search">
-          <input id="search-btn" type="submit" value="Search">
-          <div id="links" />
+        <div class="col s9" id="content">
+          <div class="row">
+            <div class="col s6">
+              <input id="search-box" type="text" name="search">
+            </div>
+            <div class="col s3">
+              <input id="search-btn" type="submit" value="Search" class="waves-effect waves-light btn">
+            </div>
+          </div>
+          <div id="links" class="row" />
         </div>
       </div>
     </div>
 
-    <!-- Include Scala.js compiled code -->
     <script type="text/javascript" src="jobsscan-fastopt.js"></script>
-    <!-- Run tutorial.webapp.TutorialApp -->
+    <script type="text/javascript" src="jobsscan-deps.js"></script>
+
     <script type="text/javascript">
       new Client().main();
     </script>
