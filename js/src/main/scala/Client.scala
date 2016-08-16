@@ -3,6 +3,7 @@ import org.scalajs.dom
 import org.scalajs.dom.raw._
 import org.scalajs.jquery.{jQuery => JQ}
 import scala.scalajs.js.Dynamic.global
+import scala.scalajs.js.timers._
 import dom.document
 import upickle.default._
 
@@ -22,6 +23,7 @@ object Client extends JSApp {
   def main(): Unit = {
     val socket = new WebSocket(WSServer)
     val links = document.getElementById("links")
+    var progress: Option[Progress] = None
 
     socket.onopen = (e: scala.scalajs.js.Any) => {
       global.console.log("Connected to WebSocket Server on " + WSServer)
@@ -31,13 +33,17 @@ object Client extends JSApp {
       global.console.log("Error occurred:", e)
     }
 
-    socket.onmessage = (e: dom.MessageEvent) => {
+    socket.onmessage = (e: dom.MessageEvent) =>
       read[Tuple2[String, String]](e.data.toString()) match {
-        case ("SuccessfulCandidate", url) => appendCandidate(links, url)
-        case ("FailedCandidate", problem) => {}
+        case ("SuccessfulCandidate", url) =>
+          progress foreach { _.progress }
+          appendCandidate(links, url)
+        case ("FailedCandidate", problem) => progress foreach { _.progress }
+        case ("CandidatesCount", countString) => progress = Some(new Progress(countString.toInt))
         case _ => global.console.error("unknown message", e)
       }
-    }
+
+    socket.onclose = (e: dom.Event) => Progress.remove
 
     document.addEventListener("DOMContentLoaded", { (e: dom.Event) =>
       val searchBox = document.getElementById("search-box") match {
@@ -53,6 +59,7 @@ object Client extends JSApp {
       searchBtn.addEventListener("click", { (mouseEvent: dom.Event) =>
         socket.send(write(("StartSearch", searchBox.value)))
         links.innerHTML = ""
+        Progress.show
       }, false)
     });
   }
@@ -60,22 +67,22 @@ object Client extends JSApp {
 
 object Progress {
 
-  private def jqnode = JQ("#links")
+  private def jqnode = JQ("#progress")
 
-  def isShown = jqnode.find("#progress").length == 1
+  def isShown = jqnode.length == 1
   def isDeterminate = jqnode.find("div.determinate").length == 1
   def isIndeterminate = !isDeterminate
 
   def show = jqnode.append("""
-    <div class="progress" id="progress">
+    <div class="progress">
       <div class="indeterminate"></div>
     </div>
     """.stripMargin)
 
-  def progress(amount: Int) = {
+  def progress(amount: Int): Unit = {
     assert(amount <= 100)
 
-    val progress = jqnode.find("#progress").children().first()
+    val progress = jqnode.find(".progress").children().first
 
     if (isShown) {
       if (isIndeterminate) {
@@ -86,5 +93,19 @@ object Progress {
     }
   }
 
-  def remove = if (isShown) jqnode.find("#progress").remove()
+  def progress(amount: Double): Unit = progress(amount.toInt)
+
+  def remove = if (isShown) jqnode.find(".progress").remove()
+}
+
+class Progress(val totalMessages: Int) {
+  private var count = 0
+
+  def progress = {
+    count += 1
+
+    Progress.progress(count.toDouble / totalMessages.toDouble * 100)
+
+    if (count == totalMessages) setTimeout(3000) { Progress.remove }
+  }
 }

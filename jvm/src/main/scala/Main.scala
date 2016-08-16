@@ -52,9 +52,9 @@ object Main extends App {
             .recover { case t: Throwable => ("FailedCandidate", t.toString()) }
             .map { default.write(_) }
 
-          listOfScannedLinks map { f: Future[URL] =>
+          List(TextMessage(default.write( ("CandidatesCount", listOfScannedLinks.size.toString()) ))) ++ (listOfScannedLinks map { f: Future[URL] =>
             TextMessage(Source.fromFuture { futureURLToJson(f) })
-          }
+          }).toList
         }
         case NotSupported(msg) => List(TextMessage(Source.single(s"not supported message: $msg")))
         case _ => List(TextMessage(Source.single("unknown message type")))
