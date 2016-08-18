@@ -1,10 +1,15 @@
-import org.specs2.mutable.Specification
+package crawler
+
 import java.net.URL
-import net.ruippeixotog.scalascraper.model.Document
-import org.specs2.mock.Mockito
-import net.ruippeixotog.scalascraper.browser.JsoupBrowser
+
 import scala.concurrent._
 import scala.concurrent.duration._
+
+import org.specs2.mutable.Specification
+import org.specs2.mock.Mockito
+
+import net.ruippeixotog.scalascraper.model.Document
+import net.ruippeixotog.scalascraper.browser.JsoupBrowser
 
 class AdapterSpec extends Specification with Mockito {
 
@@ -54,9 +59,3 @@ class AdapterSpec extends Specification with Mockito {
 
   }
 }
-
-
-
-
-
-
