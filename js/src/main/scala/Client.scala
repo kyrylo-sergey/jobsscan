@@ -27,12 +27,22 @@ object Client extends JSApp {
 
   def main(): Unit = {
     val links = document.getElementById("links")
-    var progress: Option[Progress] = None
+    val btn = JQ("#search-btn")
 
     def bindConnectionEvents(conn: Connection) = {
+      val progress = conn.progressInfo.map(new Progress(_))
 
-      conn.open onSuccess { case _ => Progress.show }
-      conn.close onComplete { case _ => Progress.remove }
+      progress.flatMap(_.complete) onSuccess {
+        case _ =>
+          conn.doClose
+          btn.removeClass("disabled")
+      }
+
+      conn.open onSuccess {
+        case _ =>
+          Progress.show
+          btn.addClass("disabled")
+      }
 
       conn
         .onError { e: dom.Event => global.console.error("Error occured", e) }
@@ -40,22 +50,24 @@ object Client extends JSApp {
           appendCandidate(links, url)
           progress foreach { _.progress }
         }
-        .onMessage("FailedCandidate") { _ => progress foreach { _.progress } }
-        .onMessage("CandidatesCount") { countString =>
-          progress = Some(new Progress(countString.toInt))
+        .onMessage("FailedCandidate") { p =>
+          progress foreach { _.progress }
         }
     }
 
     JQ {
-      JQ("#search-btn").on("click", { e: JQueryEventObject =>
-        val conn = new Connection()
-        bindConnectionEvents(conn)
-        conn.send("StartSearch", document.getElementById("search-box") match {
-          case elem: HTMLInputElement => elem.value
-          case elem =>
-            global.console.error(s"expected HTMLInputElement, got $elem")
-            throw new RuntimeException()
-        })
+      btn.on("click", { e: JQueryEventObject =>
+        if (!btn.hasClass("disabled")) {
+          val conn = new Connection()
+          bindConnectionEvents(conn)
+          links.innerHTML = ""
+          conn.send("StartSearch", document.getElementById("search-box") match {
+            case elem: HTMLInputElement => elem.value
+            case elem =>
+              global.console.error(s"expected HTMLInputElement, got $elem")
+              throw new RuntimeException()
+          })
+        }
       })
     }
   }
@@ -69,10 +81,13 @@ class Connection(private val url: String = "ws://localhost:8080/ws-echo") {
   private val openPromise = Promise[Any]()
   private val closedPromise = Promise[dom.Event]()
   private val socketPromise = Promise[WebSocket]()
+  private val progressPromise = Promise[Int]
   private val onMessageCallbacks: mutable.Map[String, List[MessageHandler]] =
     mutable.Map.empty withDefault { _ => List.empty }
   private val onErrorCallbacks: mutable.ListBuffer[ErrorHandler] =
     mutable.ListBuffer.empty
+
+  onMessage("CandidatesCount") { progressPromise success _.toInt }
 
   private def connect: WebSocket = {
     val socket = new WebSocket(url)
@@ -99,6 +114,8 @@ class Connection(private val url: String = "ws://localhost:8080/ws-echo") {
 
   def close = closedPromise.future
 
+  def progressInfo = progressPromise.future
+
   def onMessage(messageType: String)(h: MessageHandler) = {
     onMessageCallbacks.update(messageType, h :: onMessageCallbacks(messageType))
     this
@@ -108,23 +125,26 @@ class Connection(private val url: String = "ws://localhost:8080/ws-echo") {
 
   def send(messageType: String, data: String) = socket foreach {
     case socket: WebSocket => socket.send(write((messageType, data)))
-
   }
+
+  def doClose = socket onSuccess { case ws => ws.close() }
 }
 
 object Progress {
 
   private def jqnode = JQ("#progress")
 
-  def isShown = jqnode.length == 1
+  def isShown = jqnode.find(".progress").length == 1
   def isDeterminate = jqnode.find("div.determinate").length == 1
   def isIndeterminate = !isDeterminate
 
-  def show = jqnode.append("""
-    <div class="progress">
-      <div class="indeterminate"></div>
-    </div>
-    """.stripMargin)
+  def show = if (!isShown) {
+    jqnode.append("""
+      <div class="progress">
+        <div class="indeterminate"></div>
+      </div>
+      """.stripMargin)
+  }
 
   def progress(amount: Int): Unit = {
     assert(amount <= 100)
@@ -147,12 +167,20 @@ object Progress {
 
 class Progress(val totalMessages: Int) {
   private var count = 0
+  private val completePromise = Promise[Unit]()
 
   def progress = {
     count += 1
 
     Progress.progress(count.toDouble / totalMessages.toDouble * 100)
 
-    if (count == totalMessages) setTimeout(3000) { Progress.remove }
+    if (count == totalMessages) {
+      setTimeout(1000) {
+        Progress.remove
+        completePromise.success(Unit)
+      }
+    }
   }
+
+  def complete = completePromise.future
 }

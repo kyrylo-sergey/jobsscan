@@ -21,8 +21,8 @@ object Adapter {
 
   def all(keyword: String): Future[Set[URL]] = Future.fold(adapters(keyword).map(_.candidates))(List.empty[URL])(_ ::: _) map { _.toSet }
 
-  def allChecked(keyword: String): Future[Set[Future[URL]]] =
-    Future.fold(adapters(keyword).map(_.checked))(Set.empty[Future[URL]])(_ union _)
+  def allChecked(keyword: String, scanner: Scanner): Future[Set[Future[URL]]] =
+    Future.fold(adapters(keyword).map(_.checked(scanner)))(Set.empty[Future[URL]])(_ union _)
 }
 
 trait Adapter {
@@ -30,10 +30,10 @@ trait Adapter {
 
   protected val startingPoint: URL
   protected val maxPages: Int
-  val scanner = new SimpleScanner("Scala")
 
-  def checked: Future[Set[Future[URL]]] =
+  def checked(scanner: Scanner): Future[Set[Future[URL]]] = {
     candidates map { _.toSet } map { scanner.scan }
+  }
 
   def candidates: Future[List[URL]] = getCandidateLinks() map { _._1 }
 

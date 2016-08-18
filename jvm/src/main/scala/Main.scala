@@ -42,8 +42,10 @@ object Main extends App {
 
           println("Started searching for candidates")
 
+          val scanner = new SimpleScanner(keyword)
+
           // TODO: remove blocking
-          val listOfScannedLinks = Await.result(Adapter.allChecked(keyword), 1 hour)
+          val listOfScannedLinks = Await.result(Adapter.allChecked(keyword, scanner), 1 hour)
 
           println(s"Found ${listOfScannedLinks.size} candidates. Looking for $keyword in those")
 
