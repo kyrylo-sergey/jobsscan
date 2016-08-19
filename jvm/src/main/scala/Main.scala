@@ -64,18 +64,16 @@ object Main extends App {
 
   import Directives._
 
-  val route = get {
-    pathEndOrSingleSlash {
-      getFromFile("js/index.html")
-    }
-  } ~
-    path("ws-echo") {
-      get {
+  val route =
+    get {
+      pathEndOrSingleSlash {
+        getFromFile("js/index.html")
+      } ~
+      path("ws-echo") {
         handleWebSocketMessages(websocketHandler)
       }
     } ~
-    path("jobsscan-fastopt.js")(getFromFile("js/target/scala-2.11/jobsscan-fastopt.js")) ~
-    path("jobsscan-deps.js")(getFromFile("js/target/scala-2.11/jobsscan-jsdeps.js"))
+    getFromResourceDirectory("")
 
   val bindingFuture = Http().bindAndHandle(route, interface = "localhost", port = 8080)
 
@@ -90,6 +88,6 @@ object Main extends App {
 
     case Failure(e) =>
       println(s"Binding failed with ${e.getMessage}")
-      system.shutdown()
+      system.terminate()
   }
 }

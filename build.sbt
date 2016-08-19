@@ -27,10 +27,21 @@ lazy val jobsscan = crossProject.in(file(".")).
     jsDependencies ++= Seq(
       "org.webjars" % "jquery" % "3.1.0" / "3.1.0/dist/jquery.min.js",
       "org.webjars.bower" % "materialize" % "0.97.6" / "0.97.6/dist/js/materialize.min.js" dependsOn "dist/jquery.min.js"
-    )
+    ),
+    artifactPath in Compile in fastOptJS := (crossTarget in fastOptJS).value / ((moduleName in fastOptJS).value + ".js"),
+    artifactPath in Compile in fullOptJS := (crossTarget in fullOptJS).value / ((moduleName in fullOptJS).value + ".js"),
+    artifactPath in Compile in packageJSDependencies :=
+      ((crossTarget in packageJSDependencies).value /
+        ((moduleName in packageJSDependencies).value + "-deps.js")),
+    artifactPath in Compile in packageMinifiedJSDependencies :=
+      ((crossTarget in packageMinifiedJSDependencies).value /
+        ((moduleName in packageMinifiedJSDependencies).value + "-deps.js"))
   )
 
-lazy val server = jobsscan.jvm
+lazy val server = jobsscan.jvm.settings(
+  (resources in Compile) += (fastOptJS in (client, Compile)).value.data,
+  (resources in Compile) += (packageJSDependencies in (client, Compile)).value
+)
 lazy val client = jobsscan.js
 
 lazy val root = project.in(file(".")).
