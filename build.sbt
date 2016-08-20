@@ -14,7 +14,8 @@ lazy val jobsscan = crossProject.in(file(".")).
       "com.typesafe.akka" %% "akka-http-experimental" % "2.4.9-RC1",
       "org.specs2" %% "specs2-core" % "3.8.3" % "test",
       "org.specs2" %% "specs2-mock" % "3.8.3" % "test",
-      "com.lihaoyi" %%% "upickle" % "0.4.1"
+      "com.lihaoyi" %%% "upickle" % "0.4.1",
+      "com.lihaoyi" %% "scalatags" % "0.6.0"
     )
   ).
   jsSettings(
@@ -23,7 +24,8 @@ lazy val jobsscan = crossProject.in(file(".")).
     libraryDependencies ++= Seq(
       "org.scala-js" %%% "scalajs-dom" % "0.9.0",
       "com.lihaoyi" %%% "upickle" % "0.4.1",
-      "be.doeraene" %%% "scalajs-jquery" % "0.9.0"
+      "be.doeraene" %%% "scalajs-jquery" % "0.9.0",
+      "com.lihaoyi" %%% "scalatags" % "0.6.0"
     ),
     jsDependencies ++= Seq(
       RuntimeDOM,

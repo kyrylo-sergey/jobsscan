@@ -2,7 +2,7 @@ import scala.scalajs.js.JSApp
 import org.scalajs.jquery.JQueryEventObject
 import org.scalajs.dom
 import org.scalajs.dom.raw._
-import org.scalajs.jquery.{jQuery => JQ}
+import org.scalajs.jquery.{jQuery => JQ, JQuery}
 import scala.scalajs.js.Dynamic.global
 import scala.scalajs.js.timers._
 import scala.scalajs.js.{Any}
@@ -11,22 +11,16 @@ import upickle.default._
 import scala.concurrent.{Promise, Future}
 import scala.scalajs.concurrent.JSExecutionContext.Implicits.queue
 import scala.collection.mutable
+import scalatags.JsDom.all._
 
 object Client extends JSApp {
   private final val WSServer = s"ws://${document.location.host}/ws-echo"
 
-  def appendCandidate(targetNode: dom.Node, url: String): Unit = {
-    val aNode = document.createElement("a")
-    aNode.setAttribute("href", url)
-    aNode.innerHTML = url
-    aNode.setAttribute("target", "_blank")
-
-    targetNode.appendChild(document.createElement("br"))
-    targetNode.appendChild(aNode)
-  }
+  def appendCandidate(targetNode: JQuery, url: String): Unit =
+    targetNode append p(a(url, href := url, target := "_blank")).render
 
   def main(): Unit = {
-    val links = document.getElementById("links")
+    val links = JQ("#links")
     val btn = JQ("#search-btn")
 
     def bindConnectionEvents(conn: Connection) = {
@@ -38,11 +32,7 @@ object Client extends JSApp {
           btn.removeClass("disabled")
       }
 
-      conn.open onSuccess {
-        case _ =>
-          Progress.show
-          btn.addClass("disabled")
-      }
+      conn.open onSuccess { case _ => Progress.show }
 
       conn
         .onError { e: dom.Event => global.console.error("Error occured", e) }
@@ -58,9 +48,10 @@ object Client extends JSApp {
     JQ {
       btn.on("click", { e: JQueryEventObject =>
         if (!btn.hasClass("disabled")) {
+          btn.addClass("disabled")
           val conn = new Connection()
           bindConnectionEvents(conn)
-          links.innerHTML = ""
+          links.html("")
           conn.send("StartSearch", document.getElementById("search-box") match {
             case elem: HTMLInputElement => elem.value
             case elem =>

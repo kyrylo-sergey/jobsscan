@@ -5,14 +5,17 @@ import scala.concurrent._
 import scala.concurrent.duration._
 import scala.io.StdIn
 import scala.util.{Success, Failure}
+import scala.language.implicitConversions
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
 import akka.http.scaladsl.server.Directives
+import akka.http.scaladsl.model.{HttpEntity, ContentTypes}
 import akka.stream.{ActorMaterializer}
 import akka.stream.scaladsl.{Flow, Source}
 import upickle._
+import scalatags.Text.all._
 
 import proto._
 import crawler._
@@ -44,6 +47,8 @@ object Main extends App {
 
           val scanner = new SimpleScanner(keyword)
 
+          implicit def futureToSource[T](f: Future[T]): Source[T, akka.NotUsed] = Source.fromFuture(f)
+
           // TODO: remove blocking
           val listOfScannedLinks = Await.result(Adapter.allChecked(keyword, scanner), 1 hour)
 
@@ -54,12 +59,11 @@ object Main extends App {
             .recover { case t: Throwable => ("FailedCandidate", t.toString()) }
             .map { default.write(_) }
 
-          List(TextMessage(default.write( ("CandidatesCount", listOfScannedLinks.size.toString()) ))) ++ (listOfScannedLinks map { f: Future[URL] =>
-            TextMessage(Source.fromFuture { futureURLToJson(f) })
-          }).toList
+          List(TextMessage(default.write(("CandidatesCount", listOfScannedLinks.size.toString())))) ++
+            (listOfScannedLinks map { f: Future[URL] => TextMessage(futureURLToJson(f)) }).toList
         }
-        case NotSupported(msg) => List(TextMessage(Source.single(s"not supported message: $msg")))
-        case _ => List(TextMessage(Source.single("unknown message type")))
+        case NotSupported(msg) => List(TextMessage(s"not supported message: $msg"))
+        case _ => List(TextMessage("unknown message type"))
       }
 
   import Directives._
@@ -67,13 +71,13 @@ object Main extends App {
   val route =
     get {
       pathEndOrSingleSlash {
-        getFromFile("js/index.html")
+        complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, Templates.index.render))
       } ~
-      path("ws-echo") {
-        handleWebSocketMessages(websocketHandler)
-      }
+        path("ws-echo") {
+          handleWebSocketMessages(websocketHandler)
+        }
     } ~
-    getFromResourceDirectory("")
+      getFromResourceDirectory("")
 
   val bindingFuture = Http().bindAndHandle(route, interface = "localhost", port = 8080)
 
@@ -90,4 +94,45 @@ object Main extends App {
       println(s"Binding failed with ${e.getMessage}")
       system.terminate()
   }
+}
+
+object Templates {
+
+  def index =
+    html(
+      head(
+        title := "JobsScan",
+        link(
+          rel := "stylesheet",
+          href := "https://cdnjs.cloudflare.com/ajax/libs/materialize/0.97.7/css/materialize.min.css"
+        )
+      ),
+      body(
+        div(
+          `class` := "container",
+          div(
+            `class` := "row",
+            div(`class` := "col s9", id := "header",
+              div(
+                `class` := "row",
+                h1("JobsScan"), h6("a better way to find your dream job ~>")
+              ))
+          ),
+          div(
+            `class` := "row",
+            div(`class` := "col s9", id := "content",
+              div(
+                `class` := "row",
+                div(`class` := "col s6", input(id := "search-box", `type` := "text", name := "search")),
+                div(`class` := "col s3", a("Search", id := "search-btn", `class` := "waves-effect waves-light btn"))
+              ),
+              div(id := "progress", `class` := "row"),
+              div(id := "links", `class` := "row"))
+          )
+        ),
+        script(`type` := "text/javascript", src := "jobsscan.js"),
+        script(`type` := "text/javascript", src := "jobsscan-deps.js"),
+        script("new Client().main();", `type` := "text/javascript")
+      )
+    )
 }
