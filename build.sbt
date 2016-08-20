@@ -1,6 +1,9 @@
+import NativePackagerHelper._
+
 scalaVersion in ThisBuild := "2.11.8"
 
 lazy val jobsscan = crossProject.in(file(".")).
+  enablePlugins(JavaAppPackaging).
   settings(
     name := "jobsscan",
     version := "0.1-SNAPSHOT",
