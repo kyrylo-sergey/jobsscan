@@ -13,7 +13,7 @@ import scala.scalajs.concurrent.JSExecutionContext.Implicits.queue
 import scala.collection.mutable
 
 object Client extends JSApp {
-  private final val WSServer = "ws://localhost:8080/ws-echo"
+  private final val WSServer = s"ws://${document.location.host}/ws-echo"
 
   def appendCandidate(targetNode: dom.Node, url: String): Unit = {
     val aNode = document.createElement("a")
