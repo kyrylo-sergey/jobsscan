@@ -7,6 +7,7 @@ import scala.concurrent._
 
 import net.ruippeixotog.scalascraper.browser.JsoupBrowser
 
+import proto._
 import Adapter.ec
 
 object Scanner {
@@ -14,26 +15,39 @@ object Scanner {
     new SimpleScanner(keyword)
   )
 
-  def scan(keyword: String, candidates: Set[URL]) =
+  def scan(keyword: String, candidates: Set[CrawlCandidate]) =
     all(keyword).map(_.scan(candidates)).fold(Set.empty)(_ ++ _)
 }
 
 trait Scanner {
   val searchCriteria: String
 
-  def scan(candidates: Set[URL]): Set[Future[URL]] = candidates map { url =>
+  def scan(candidates: Set[CrawlCandidate]): Set[Future[CrawlResult]] = candidates map { crawl =>
     Future {
-      if (isCandidateAcceptable(url)) url
-      else throw new Exception(s"$url doesn't contain $searchCriteria")
+      candidateAcceptable(crawl.targetURL) match {
+        case Some(str) => CrawlSuccessful(crawl.source, crawl.initialURL.toString(), crawl.targetURL.toString(), str)
+        case None => CrawlUnsuccessful(crawl.source, crawl.initialURL.toString(), crawl.targetURL.toString(),
+          s"${crawl.initialURL} doesn't contain $searchCriteria")
+      }
+    } recover { case t: Throwable =>
+        CrawlUnsuccessful(crawl.source, crawl.initialURL.toString(), crawl.initialURL.toString(), t.toString)
     }
   }
 
-  protected def isCandidateAcceptable(candidate: URL): Boolean
+  protected def candidateAcceptable(candidate: URL): Option[String]
 }
 
 class SimpleScanner(search: String) extends Scanner {
   override val searchCriteria = search
 
-  override protected def isCandidateAcceptable(canidate: URL) =
-    JsoupBrowser().get(canidate.toString()).body.innerHtml.contains(searchCriteria)
+  override protected def candidateAcceptable(canidate: URL) = {
+    val body = JsoupBrowser().get(canidate.toString()).body.innerHtml
+    val pos = body.indexOf(searchCriteria)
+
+    if(pos != -1) {
+      val start = if(pos - 50 > 0) pos - 50 else 0
+      val end = if(pos + 50 < body.length()) pos + 50 else body.length()
+      Some(body.substring(start, end))
+    } else None
+  }
 }

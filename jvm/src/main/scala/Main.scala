@@ -33,7 +33,8 @@ object Main extends App {
       .collect { case TextMessage.Strict(msg) => msg }
       .map { msg =>
         default.read[(String, String)](msg) match {
-          case ("StartSearch", term) => StartSearch(term)
+          //TODO: simplify this after https://issues.scala-lang.org/browse/SI-7046 is fixed
+          case (Msg.START_SEARCH, msg) => default.read[StartSearch](msg)
           case _ => NotSupported(msg)
         }
       }
@@ -55,13 +56,17 @@ object Main extends App {
 
           println(s"Found ${listOfScannedLinks.size} candidates. Looking for $keyword in those")
 
-          def futureURLToJson(f: Future[URL]) = f
-            .map { (u: URL) => ("SuccessfulCandidate", u.toString()) }
-            .recover { case t: Throwable => ("FailedCandidate", t.toString()) }
+          def futureURLToJson(f: Future[CrawlResult]) = f
+            .map { _ match  {
+              case cs: CrawlSuccessful => (Msg.CRAWL_SUCCESSFUL, default.write(cs))
+              case cu: CrawlUnsuccessful => (Msg.CRAWL_UNSUCCESSFUL, default.write(cu))
+            }
+          }
+//            .recover { case t: Throwable => ("CrawlUnsuccessful", t.toString()) }
             .map { default.write(_) }
 
-          List(TextMessage(default.write(("CandidatesCount", listOfScannedLinks.size.toString())))) ++
-            (listOfScannedLinks map { f: Future[URL] => TextMessage(futureURLToJson(f)) }).toList
+          List(TextMessage(default.write((Msg.CANDIDATES_COUNT, default.write(CandidatesCount(listOfScannedLinks.size)))))) ++
+            (listOfScannedLinks map { f: Future[CrawlResult] => TextMessage(futureURLToJson(f)) }).toList
         }
         case NotSupported(msg) => List(TextMessage(s"not supported message: $msg"))
         case _ => List(TextMessage("unknown message type"))

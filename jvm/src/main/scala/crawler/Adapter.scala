@@ -13,16 +13,21 @@ import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import net.ruippeixotog.scalascraper.model.Document
 
+import proto._
+
+case class CrawlCandidate(source: String, initialURL: URL, targetURL: URL)
+
 object Adapter {
 
   implicit val ec: ExecutionContext = ExecutionContext.fromExecutorService(Executors.newWorkStealingPool(100))
 
-  def adapters(keyword: String) = List(new YCombinator(20), new Rabotaua(20, keyword), new Stackoverflow(20, keyword))
+  def adapters(keyword: String) = List(new YCombinator(5), new Rabotaua(5, keyword), new Stackoverflow(5, keyword))
 
-  def all(keyword: String): Future[Set[URL]] = Future.fold(adapters(keyword).map(_.candidates))(List.empty[URL])(_ ::: _) map { _.toSet }
+  def all(keyword: String): Future[Set[CrawlCandidate]] =
+    Future.fold(adapters(keyword).map(_.candidates))(List.empty[CrawlCandidate])(_ ::: _) map { _.toSet }
 
-  def allChecked(keyword: String, scanner: Scanner): Future[Set[Future[URL]]] =
-    Future.fold(adapters(keyword).map(_.checked(scanner)))(Set.empty[Future[URL]])(_ union _)
+  def allChecked(keyword: String, scanner: Scanner): Future[Set[Future[CrawlResult]]] =
+    Future.fold(adapters(keyword).map(_.checked(scanner)))(Set.empty[Future[CrawlResult]])(_ union _)
 }
 
 trait Adapter {
@@ -31,14 +36,14 @@ trait Adapter {
   protected val startingPoint: URL
   protected val maxPages: Int
 
-  def checked(scanner: Scanner): Future[Set[Future[URL]]] = {
+  def checked(scanner: Scanner): Future[Set[Future[CrawlResult]]] = {
     candidates map { _.toSet } map { scanner.scan }
   }
 
-  def candidates: Future[List[URL]] = getCandidateLinks() map { _._1 }
+  def candidates: Future[List[CrawlCandidate]] = getCandidateLinks() map { _._1 }
 
-  private def getCandidateLinks(from: URL = startingPoint, currentPage: Int = 1): Future[(List[URL], Int)] = {
-    def loop(url: URL, candidates: List[URL]) =
+  private def getCandidateLinks(from: URL = startingPoint, currentPage: Int = 1): Future[(List[CrawlCandidate], Int)] = {
+    def loop(url: URL, candidates: List[CrawlCandidate]) =
       Future.fold(List(getCandidateLinks(url, currentPage + 1)))((candidates, currentPage)) {
         case (l1, l2) => {
           (l1._1 ::: l2._1, currentPage)
@@ -46,17 +51,21 @@ trait Adapter {
       }
 
     extractLinksFrom(from) flatMap {
-      case (candidates: List[URL], nextPage: Option[URL]) =>
+      case (candidates: List[CrawlCandidate], nextPage: Option[URL]) =>
         nextPage
-          .flatMap { u: URL => if (currentPage < maxPages) Some(loop(u, candidates)) else None }
+          .flatMap { u: URL => if (currentPage <= maxPages) Some(loop(u, candidates)) else None }
           .getOrElse { Future successful ((candidates, currentPage)) }
     }
   }
 
-  private def extractLinksFrom(location: URL): Future[(List[URL], Option[URL])] = Future {
-    Try(getBrowserInstance.get(location.toString()))
-      .map { doc => (doExtractLinks(doc), nextPage(doc)) }
-      .getOrElse { (List.empty, None) }
+  private def extractLinksFrom(location: URL): Future[(List[CrawlCandidate], Option[URL])] = Future {
+    Try(
+      getBrowserInstance.get(location.toString())
+    )
+      .map { doc =>
+        val results = doExtractLinks(doc) map { CrawlCandidate(this.getClass.getSimpleName, location, _) }
+        (results, nextPage(doc))
+      }.getOrElse { (List.empty, None) }
   }
 
   protected def getBrowserInstance: Browser = JsoupBrowser()

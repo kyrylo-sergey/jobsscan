@@ -13,6 +13,8 @@ import scala.scalajs.concurrent.JSExecutionContext.Implicits.queue
 import scala.collection.mutable
 import scalatags.JsDom.all._
 
+import proto._
+
 object Client extends JSApp {
   private final val WSServer = s"ws://${document.location.host}/ws-echo"
 
@@ -36,11 +38,12 @@ object Client extends JSApp {
 
       conn
         .onError { e: dom.Event => global.console.error("Error occured", e) }
-        .onMessage("SuccessfulCandidate") { url =>
-          appendCandidate(links, url)
+        .onMessage(Msg.CRAWL_SUCCESSFUL) { case CrawlSuccessful(provider, sourceURL, targetURL, foundText) =>
+          appendCandidate(links, targetURL)
+          global.console.log(foundText)
           progress foreach { _.progress }
         }
-        .onMessage("FailedCandidate") { p =>
+        .onMessage(Msg.CRAWL_UNSUCCESSFUL) { case cu: CrawlUnsuccessful =>
           progress foreach { _.progress }
         }
     }
@@ -52,12 +55,13 @@ object Client extends JSApp {
           val conn = new Connection(WSServer)
           bindConnectionEvents(conn)
           links.html("")
-          conn.send("StartSearch", document.getElementById("search-box") match {
+          val term = document.getElementById("search-box") match {
             case elem: HTMLInputElement => elem.value
             case elem =>
               global.console.error(s"expected HTMLInputElement, got $elem")
               throw new RuntimeException()
-          })
+          }
+          conn.send(Msg.START_SEARCH, write(StartSearch(term)))
         }
       })
     }
@@ -66,7 +70,7 @@ object Client extends JSApp {
 
 class Connection(private val url: String) {
 
-  private type MessageHandler = String => Unit
+  private type MessageHandler = PartialFunction[ProtoMessage, Unit]
   private type ErrorHandler = dom.Event => Unit
 
   private val openPromise = Promise[Any]()
@@ -78,7 +82,7 @@ class Connection(private val url: String) {
   private val onErrorCallbacks: mutable.ListBuffer[ErrorHandler] =
     mutable.ListBuffer.empty
 
-  onMessage("CandidatesCount") { progressPromise success _.toInt }
+  onMessage(Msg.CANDIDATES_COUNT) { case CandidatesCount(c) => progressPromise success c }
 
   private def connect: WebSocket = {
     val socket = new WebSocket(url)
@@ -86,8 +90,15 @@ class Connection(private val url: String) {
     socket.onopen = (e: Any) => openPromise.success(e)
     socket.onclose = (e: dom.Event) => closedPromise.success(e)
     socket.onmessage = (e: dom.MessageEvent) => {
-      val (messageType, content) = read[(String, String)](e.data.toString())
-      onMessageCallbacks(messageType) foreach { _(content) }
+      val (messageType, msgBody) = read[(String, String)](e.data.toString())
+      //TODO: simplify this after https://issues.scala-lang.org/browse/SI-7046 is fixed
+      val messageInstance: ProtoMessage = messageType match {
+        case Msg.CANDIDATES_COUNT => read[CandidatesCount](msgBody)
+        case Msg.CRAWL_SUCCESSFUL => read[CrawlSuccessful](msgBody)
+        case Msg.CRAWL_UNSUCCESSFUL => read[CrawlUnsuccessful](msgBody)
+      }
+
+      onMessageCallbacks(messageType) foreach { _(messageInstance) }
     }
     socket.onerror = (e: dom.Event) => onErrorCallbacks.toList foreach { _(e) }
 
