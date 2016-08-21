@@ -49,7 +49,7 @@ object Client extends JSApp {
       btn.on("click", { e: JQueryEventObject =>
         if (!btn.hasClass("disabled")) {
           btn.addClass("disabled")
-          val conn = new Connection()
+          val conn = new Connection(WSServer)
           bindConnectionEvents(conn)
           links.html("")
           conn.send("StartSearch", document.getElementById("search-box") match {
@@ -64,7 +64,7 @@ object Client extends JSApp {
   }
 }
 
-class Connection(private val url: String = "ws://localhost:8080/ws-echo") {
+class Connection(private val url: String) {
 
   private type MessageHandler = String => Unit
   private type ErrorHandler = dom.Event => Unit

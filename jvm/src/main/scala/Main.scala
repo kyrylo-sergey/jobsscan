@@ -6,6 +6,7 @@ import scala.concurrent.duration._
 import scala.io.StdIn
 import scala.util.{Success, Failure}
 import scala.language.implicitConversions
+import scala.collection.JavaConverters._
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
@@ -79,7 +80,10 @@ object Main extends App {
     } ~
       getFromResourceDirectory("")
 
-  val bindingFuture = Http().bindAndHandle(route, interface = "localhost", port = 8080)
+  val env = System.getenv.asScala
+  val host = env getOrElse("JOBSSCANHOST", "localhost")
+  val port = env getOrElse("JOBSSCANPORT", "8085")
+  val bindingFuture = Http().bindAndHandle(route, interface = host, port = port.toInt)
 
   bindingFuture.onComplete {
     case Success(binding) =>
@@ -130,8 +134,8 @@ object Templates {
               div(id := "links", `class` := "row"))
           )
         ),
-        script(`type` := "text/javascript", src := "jobsscan.js"),
         script(`type` := "text/javascript", src := "jobsscan-deps.js"),
+        script(`type` := "text/javascript", src := "jobsscan.js"),
         script("new Client().main();", `type` := "text/javascript")
       )
     )
