@@ -119,7 +119,7 @@ class Stackoverflow(override val maxPages: Int, val keyword: String) extends Ada
   override protected def doExtractLinks(doc: Document): List[URL] = for {
     title <- doc >> elementList("h1 a.job-link")
     link <- title >?> attr("href")("a")
-    url <- Try { new URL(link) } toOption
+    url <- Try { new URL(domain + link) } toOption
   } yield url
 
   override def nextPage(doc: Document) = {
