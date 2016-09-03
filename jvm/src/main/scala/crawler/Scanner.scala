@@ -25,7 +25,7 @@ trait Scanner {
   def scan(candidates: Set[CrawlCandidate]): Set[Future[CrawlResult]] = candidates map { crawl =>
     Future {
       candidateAcceptable(crawl.targetURL) match {
-        case Some(str) => CrawlSuccessful(crawl.source, crawl.initialURL.toString(), crawl.targetURL.toString(), str)
+        case Some((text, title)) => CrawlSuccessful(crawl.source, crawl.initialURL.toString(), crawl.targetURL.toString(), text, title)
         case None => CrawlUnsuccessful(crawl.source, crawl.initialURL.toString(), crawl.targetURL.toString(),
           s"${crawl.initialURL} doesn't contain $searchCriteria")
       }
@@ -34,20 +34,21 @@ trait Scanner {
     }
   }
 
-  protected def candidateAcceptable(candidate: URL): Option[String]
+  protected def candidateAcceptable(candidate: URL): Option[(String, String)]
 }
 
 class SimpleScanner(search: String) extends Scanner {
   override val searchCriteria = search
 
   override protected def candidateAcceptable(canidate: URL) = {
-    val body = JsoupBrowser().get(canidate.toString()).body.innerHtml
+    val doc = JsoupBrowser().get(canidate.toString())
+    val body = doc.body.innerHtml
     val pos = body.indexOf(searchCriteria)
 
     if(pos != -1) {
       val start = if(pos - 50 > 0) pos - 50 else 0
       val end = if(pos + 50 < body.length()) pos + 50 else body.length()
-      Some(body.substring(start, end))
+      Some( body.substring(start, end) -> doc.title)
     } else None
   }
 }

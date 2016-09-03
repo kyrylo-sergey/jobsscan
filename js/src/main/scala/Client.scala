@@ -18,8 +18,12 @@ import proto._
 object Client extends JSApp {
   private final val WSServer = s"ws://${document.location.host}/ws-echo"
 
-  def appendCandidate(targetNode: JQuery, url: String): Unit =
-    targetNode append p(a(url, href := url, target := "_blank")).render
+  def appendCandidate(targetNode: JQuery, cs: CrawlSuccessful): Unit =
+    targetNode.find("table tbody") append tr(
+      td(a(cs.source, href := cs.initialURL, target := "_blank")),
+      td(a(cs.title, href := cs.targetURL, target := "_blank")),
+      td(cs.foundText)
+    ).render
 
   def main(): Unit = {
     val links = JQ("#links")
@@ -38,14 +42,23 @@ object Client extends JSApp {
 
       conn
         .onError { e: dom.Event => global.console.error("Error occured", e) }
-        .onMessage(Msg.CRAWL_SUCCESSFUL) { case CrawlSuccessful(provider, sourceURL, targetURL, foundText) =>
-          appendCandidate(links, targetURL)
-          global.console.log(foundText)
+        .onMessage(Msg.CRAWL_SUCCESSFUL) { case cs: CrawlSuccessful =>
+          appendCandidate(links, cs)
           progress foreach { _.progress }
         }
         .onMessage(Msg.CRAWL_UNSUCCESSFUL) { case cu: CrawlUnsuccessful =>
           progress foreach { _.progress }
         }
+    }
+
+    def refreshResultsTable = {
+      links.html("")
+
+      val t = table(thead(
+        tr(th("Found At"), th("Link"), th("Found Text"))
+      ), tbody(), `class` := "responsive-table").render
+
+      links append t
     }
 
     JQ {
@@ -54,7 +67,7 @@ object Client extends JSApp {
           btn.addClass("disabled")
           val conn = new Connection(WSServer)
           bindConnectionEvents(conn)
-          links.html("")
+          refreshResultsTable
           val term = document.getElementById("search-box") match {
             case elem: HTMLInputElement => elem.value
             case elem =>
