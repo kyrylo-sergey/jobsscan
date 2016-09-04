@@ -4,6 +4,7 @@ import java.net.URL
 
 import scala.concurrent._
 import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
 
 import org.specs2.mutable.Specification
 import org.specs2.mock.Mockito
@@ -26,7 +27,7 @@ class AdapterSpec extends Specification with Mockito {
 
     override protected val startingPoint = start
 
-    var pageCall = 0
+    @volatile var pageCall = 0
 
     override protected def doExtractLinks(doc: Document): List[URL] = {
       pageCall += 1
@@ -49,12 +50,14 @@ class AdapterSpec extends Specification with Mockito {
   "adapter instance should" >> {
     "must iterate over pages" in {
       val a = new MyAdapter()
-      Await.result(a candidates, 1 second) must be_==(page1 ++ page2)
+      val links = a.candidates.map { c: List[CrawlCandidate] => c map { _.targetURL} }
+      Await.result(links, 1 second) must be_==(page1 ++ page2)
     }
 
     "should not iterate for more pages than parametrized" in {
       val a = new MyAdapter(1)
-      Await.result(a candidates, 1 second) must be_==(page1)
+      val links = a.candidates.map { c: List[CrawlCandidate] => c map { _.targetURL} }
+      Await.result(links, 1 second) must be_==(page1)
     }
 
   }

@@ -53,8 +53,8 @@ trait Adapter {
     extractLinksFrom(from) flatMap {
       case (candidates: List[CrawlCandidate], nextPage: Option[URL]) =>
         nextPage
-          .flatMap { u: URL => if (currentPage <= maxPages) Some(loop(u, candidates)) else None }
-          .getOrElse { Future successful ((candidates, currentPage)) }
+          .flatMap { u: URL => if (currentPage < maxPages) Some(loop(u, candidates)) else None }
+          .getOrElse { Future successful (candidates -> currentPage) }
     }
   }
 
