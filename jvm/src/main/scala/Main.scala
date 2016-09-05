@@ -57,12 +57,11 @@ object Main extends App {
           println(s"Found ${listOfScannedLinks.size} candidates. Looking for $keyword in those")
 
           def futureURLToJson(f: Future[CrawlResult]) = f
-            .map { _ match  {
+            .map {
+            //TODO: simplify this after https://issues.scala-lang.org/browse/SI-7046 is fixed
               case cs: CrawlSuccessful => (Msg.CRAWL_SUCCESSFUL, default.write(cs))
               case cu: CrawlUnsuccessful => (Msg.CRAWL_UNSUCCESSFUL, default.write(cu))
             }
-          }
-//            .recover { case t: Throwable => ("CrawlUnsuccessful", t.toString()) }
             .map { default.write(_) }
 
           List(TextMessage(default.write((Msg.CANDIDATES_COUNT, default.write(CandidatesCount(listOfScannedLinks.size)))))) ++

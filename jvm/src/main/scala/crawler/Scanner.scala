@@ -1,6 +1,7 @@
 package crawler
 
 import java.net.URL
+import java.util.regex.Pattern.quote
 
 import scala._
 import scala.concurrent._
@@ -29,7 +30,8 @@ trait Scanner {
         case None => CrawlUnsuccessful(crawl.source, crawl.initialURL.toString(), crawl.targetURL.toString(),
           s"${crawl.initialURL} doesn't contain $searchCriteria")
       }
-    } recover { case t: Throwable =>
+    } recover {
+      case t: Throwable =>
         CrawlUnsuccessful(crawl.source, crawl.initialURL.toString(), crawl.initialURL.toString(), t.toString)
     }
   }
@@ -42,13 +44,10 @@ class SimpleScanner(search: String) extends Scanner {
 
   override protected def candidateAcceptable(canidate: URL) = {
     val doc = JsoupBrowser().get(canidate.toString())
-    val body = doc.body.innerHtml
-    val pos = body.indexOf(searchCriteria)
+    val res = ("([^>]{0,50}" + quote(search) + ")(?=[^>]*(<|$))([^<]{0,50})").r
+        .findFirstMatchIn(doc.body.innerHtml)
+        .mkString
 
-    if(pos != -1) {
-      val start = if(pos - 50 > 0) pos - 50 else 0
-      val end = if(pos + 50 < body.length()) pos + 50 else body.length()
-      Some( body.substring(start, end) -> doc.title)
-    } else None
+    if (res.isEmpty()) None else Some(res -> doc.title)
   }
 }
