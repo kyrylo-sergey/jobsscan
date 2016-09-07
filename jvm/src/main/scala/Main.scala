@@ -58,7 +58,7 @@ object Main extends App {
 
           def futureURLToJson(f: Future[CrawlResult]) = f
             .map {
-            //TODO: simplify this after https://issues.scala-lang.org/browse/SI-7046 is fixed
+              //TODO: simplify this after https://issues.scala-lang.org/browse/SI-7046 is fixed
               case cs: CrawlSuccessful => (Msg.CRAWL_SUCCESSFUL, default.write(cs))
               case cu: CrawlUnsuccessful => (Msg.CRAWL_UNSUCCESSFUL, default.write(cu))
             }
@@ -82,11 +82,14 @@ object Main extends App {
           handleWebSocketMessages(websocketHandler)
         }
     } ~
-      getFromResourceDirectory("")
+    pathPrefix("assets") {
+      getFromDirectory("jvm/src/main/webapp/assets/")
+    } ~
+    getFromResourceDirectory("")
 
   val env = System.getenv.asScala
-  val host = env getOrElse("JOBSSCANHOST", "localhost")
-  val port = env getOrElse("JOBSSCANPORT", "8085")
+  val host = env getOrElse ("JOBSSCANHOST", "localhost")
+  val port = env getOrElse ("JOBSSCANPORT", "8085")
   val bindingFuture = Http().bindAndHandle(route, interface = host, port = port.toInt)
 
   bindingFuture.onComplete {
