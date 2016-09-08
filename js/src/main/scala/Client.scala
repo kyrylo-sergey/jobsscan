@@ -28,26 +28,31 @@ object Client extends JSApp {
   def main(): Unit = {
     val links = JQ("#links")
     val btn = JQ("#search-btn")
+    var connection: Option[Connection] = None
 
     def bindConnectionEvents(conn: Connection) = {
       val progress = conn.progressInfo.map(new Progress(_))
 
-      progress.flatMap(_.complete) onSuccess {
-        case _ =>
-          conn.doClose
-          btn.removeClass("disabled")
+      progress.flatMap(_.complete) onSuccess { case _ => conn.doClose }
+
+      conn.close onSuccess { case _ =>
+        Progress.remove
+        btn.removeClass("red")
+        btn.text("Search")
       }
 
       conn.open onSuccess { case _ => Progress.show }
 
       conn
         .onError { e: dom.Event => global.console.error("Error occured", e) }
-        .onMessage(Msg.CRAWL_SUCCESSFUL) { case cs: CrawlSuccessful =>
-          appendCandidate(links, cs)
-          progress foreach { _.progress }
+        .onMessage(Msg.CRAWL_SUCCESSFUL) {
+          case cs: CrawlSuccessful =>
+            appendCandidate(links, cs)
+            progress foreach { _.progress }
         }
-        .onMessage(Msg.CRAWL_UNSUCCESSFUL) { case cu: CrawlUnsuccessful =>
-          progress foreach { _.progress }
+        .onMessage(Msg.CRAWL_UNSUCCESSFUL) {
+          case cu: CrawlUnsuccessful =>
+            progress foreach { _.progress }
         }
     }
 
@@ -64,17 +69,29 @@ object Client extends JSApp {
     JQ {
       btn.on("click", { e: JQueryEventObject =>
         if (!btn.hasClass("disabled")) {
-          btn.addClass("disabled")
-          val conn = new Connection(WSServer)
-          bindConnectionEvents(conn)
-          refreshResultsTable
-          val term = document.getElementById("search-box") match {
-            case elem: HTMLInputElement => elem.value
-            case elem =>
-              global.console.error(s"expected HTMLInputElement, got $elem")
-              throw new RuntimeException()
+          if (btn.hasClass("red")) {
+            btn.addClass("disabled")
+            btn.text("Stopping")
+            connection.get.doClose onComplete { case _ =>
+                btn.removeClass("red")
+                btn.removeClass("disabled")
+                btn.text("Search")
+            }
+          } else {
+            btn.addClass("red")
+            btn.text("Stop")
+            val conn = new Connection(WSServer)
+            connection = Some(conn)
+            bindConnectionEvents(conn)
+            refreshResultsTable
+            val term = document.getElementById("search-box") match {
+              case elem: HTMLInputElement => elem.value
+              case elem =>
+                global.console.error(s"expected HTMLInputElement, got $elem")
+                throw new RuntimeException()
+            }
+            conn.send(Msg.START_SEARCH, write(StartSearch(term)))
           }
-          conn.send(Msg.START_SEARCH, write(StartSearch(term)))
         }
       })
     }
@@ -142,7 +159,10 @@ class Connection(private val url: String) {
     case socket: WebSocket => socket.send(write((messageType, data)))
   }
 
-  def doClose = socket onSuccess { case ws => ws.close() }
+  def doClose = {
+    socket foreach { _.close() }
+    close
+  }
 }
 
 object Progress {
