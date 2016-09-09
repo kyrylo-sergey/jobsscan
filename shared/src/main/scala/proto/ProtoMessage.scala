@@ -5,7 +5,7 @@ sealed trait ProtoMessage
 case class NotSupported(op: String) extends ProtoMessage
 
 // [client ~> server] messages
-case class StartSearch(term: String) extends ProtoMessage
+case class StartSearch(term: String, providers: Seq[String]) extends ProtoMessage
 
 // [client <~ server] messages
 case class CandidatesCount(count: Int) extends ProtoMessage

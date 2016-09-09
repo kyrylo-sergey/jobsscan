@@ -1,5 +1,3 @@
-import java.net.URL
-
 import scala._
 import scala.concurrent._
 import scala.concurrent.duration._
@@ -43,16 +41,16 @@ object Main extends App {
     Flow[Message]
       .via(protoMessageFlow)
       .mapConcat {
-        case StartSearch(keyword) => {
+        case StartSearch(keyword, providers) => {
 
-          println("Started searching for candidates")
+          println(s"Started searching for candidates for following providers: ${providers.mkString(", ")}")
 
           val scanner = new SimpleScanner(keyword)
 
           implicit def futureToSource[T](f: Future[T]): Source[T, akka.NotUsed] = Source.fromFuture(f)
 
           // TODO: remove blocking
-          val listOfScannedLinks = Await.result(Adapter.allChecked(keyword, scanner), 1 hour)
+          val listOfScannedLinks = Await.result(Adapter(providers: _*)(5, keyword, scanner), 1 hour)
 
           println(s"Found ${listOfScannedLinks.size} candidates. Looking for $keyword in those")
 
@@ -120,30 +118,37 @@ object Templates {
       ),
       body(
         div(
-          `class` := "container",
+          cls := "container",
           div(
-            `class` := "row",
-            div(`class` := "col s9", id := "header",
+            cls := "row",
+            div(cls := "col s9", id := "header",
               div(
-                `class` := "row",
+                cls := "row",
                 h1("JobsScan"), h6("a better way to find your dream job ~>")
               ))
           ),
           div(
-            `class` := "row",
-            div(`class` := "col s9", id := "content",
+            cls := "row",
+            div(cls := "col s9", id := "content",
               div(
-                `class` := "row",
-                div(`class` := "col s6", input(id := "search-box", `type` := "text", name := "search")),
-                div(`class` := "col s3", a("Search", id := "search-btn", `class` := "waves-effect waves-light btn"))
+                cls := "row",
+                div(cls := "col s6", input(id := "search-box", tpe := "text", name := "search")),
+                div(cls := "col s3", a("Search", id := "search-btn", cls := "waves-effect waves-light btn"))
               ),
-              div(id := "progress", `class` := "row"),
-              div(id := "links", `class` := "row"))
+              div(id := "providers", cls := "row", form(action := "#", for ((k, v) <- shared.Domain.providers.toList) yield {
+                p(
+                  input(tpe := "checkbox", value := k, id := k.toLowerCase),
+                  label(`for` := k.toLowerCase, k)
+                )
+              })),
+              div(id := "progress", cls := "row"),
+              div(id := "links", cls := "row")
+            )
           )
         ),
-        script(`type` := "text/javascript", src := "jobsscan-deps.js"),
-        script(`type` := "text/javascript", src := "jobsscan.js"),
-        script("new Client().main();", `type` := "text/javascript")
+        script(tpe := "text/javascript", src := "jobsscan-deps.js"),
+        script(tpe := "text/javascript", src := "jobsscan.js"),
+        script("new Client().main();", tpe := "text/javascript")
       )
     )
 }

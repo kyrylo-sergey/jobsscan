@@ -5,12 +5,14 @@ import org.scalajs.dom.raw._
 import org.scalajs.jquery.{jQuery => JQ, JQuery}
 import scala.scalajs.js.Dynamic.global
 import scala.scalajs.js.timers._
-import scala.scalajs.js.{Any}
+import scala.scalajs.js
+import org.scalajs.dom
 import dom.document
 import upickle.default._
 import scala.concurrent.{Promise, Future}
 import scala.scalajs.concurrent.JSExecutionContext.Implicits.queue
 import scala.collection.mutable
+import scala.language.implicitConversions
 import scalatags.JsDom.all._
 
 import proto._
@@ -28,6 +30,7 @@ object Client extends JSApp {
   def main(): Unit = {
     val links = JQ("#links")
     val btn = JQ("#search-btn")
+    val providers = JQ("#providers input")
     var connection: Option[Connection] = None
 
     def bindConnectionEvents(conn: Connection) = {
@@ -39,9 +42,13 @@ object Client extends JSApp {
         Progress.remove
         btn.removeClass("red")
         btn.text("Search")
+        providers.attr("disabled", false)
       }
 
-      conn.open onSuccess { case _ => Progress.show }
+      conn.open onSuccess { case _ =>
+        Progress.show
+        providers.attr("disabled", true)
+      }
 
       conn
         .onError { e: dom.Event => global.console.error("Error occured", e) }
@@ -84,13 +91,18 @@ object Client extends JSApp {
             connection = Some(conn)
             bindConnectionEvents(conn)
             refreshResultsTable
+            val idents: Seq[String] = providers
+              .filter { el: dom.Element => JQ(el).prop("checked").asInstanceOf[Boolean] }
+              .map { el: dom.Element => JQ(el).value() }
+              .asInstanceOf[js.Array[String]]
+
             val term = document.getElementById("search-box") match {
               case elem: HTMLInputElement => elem.value
               case elem =>
                 global.console.error(s"expected HTMLInputElement, got $elem")
                 throw new RuntimeException()
             }
-            conn.send(Msg.START_SEARCH, write(StartSearch(term)))
+            conn.send(Msg.START_SEARCH, write(StartSearch(term, idents)))
           }
         }
       })

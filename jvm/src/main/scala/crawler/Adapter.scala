@@ -14,6 +14,7 @@ import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import net.ruippeixotog.scalascraper.model.Document
 
 import proto._
+import shared.Domain._
 
 case class CrawlCandidate(source: String, initialURL: URL, targetURL: URL)
 
@@ -21,12 +22,23 @@ object Adapter {
 
   implicit val ec: ExecutionContext = ExecutionContext.fromExecutorService(Executors.newWorkStealingPool(100))
 
-  def adapters(keyword: String) = List(new YCombinator(5), new Rabotaua(5, keyword), new Stackoverflow(5, keyword))
+  private val adapterMap = Map(
+    YCombinator -> { (maxPages: Int, keyword: String) =>  new YCombinator(maxPages, keyword) },
+    StackOverflow -> { (maxPages: Int, keyword: String) =>  new Stackoverflow(maxPages, keyword) },
+    Rabotaua -> { (maxPages: Int, keyword: String) =>  new Rabotaua(maxPages, keyword) }
+  )
 
-  def all(keyword: String): Future[Set[CrawlCandidate]] =
+  def apply(adapters: String*)(maxPages: Int, keyword: String, scanner: Scanner): Future[Set[Future[CrawlResult]]] =
+    Future.fold {
+      adapterMap.keySet intersect adapters.toSet map { adapterMap(_)(maxPages, keyword) checked(scanner) }
+    }(Set.empty[Future[CrawlResult]])(_ union _)
+
+  private def adapters(keyword: String) = List(new YCombinator(5, keyword), new Rabotaua(5, keyword), new Stackoverflow(5, keyword))
+
+  private def all(keyword: String): Future[Set[CrawlCandidate]] =
     Future.fold(adapters(keyword).map(_.candidates))(List.empty[CrawlCandidate])(_ ::: _) map { _.toSet }
 
-  def allChecked(keyword: String, scanner: Scanner): Future[Set[Future[CrawlResult]]] =
+  private def allChecked(keyword: String, scanner: Scanner): Future[Set[Future[CrawlResult]]] =
     Future.fold(adapters(keyword).map(_.checked(scanner)))(Set.empty[Future[CrawlResult]])(_ union _)
 }
 
@@ -73,7 +85,7 @@ trait Adapter {
   protected def nextPage(doc: Document): Option[URL]
 }
 
-class YCombinator(override val maxPages: Int) extends Adapter {
+class YCombinator(override val maxPages: Int, val keyword: String) extends Adapter {
 
   val domain: String = "https://news.ycombinator.com/"
   override protected val startingPoint = new URL(domain + "jobs")
