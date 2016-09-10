@@ -14,10 +14,10 @@ import akka.http.scaladsl.model.{HttpEntity, ContentTypes}
 import akka.stream.{ActorMaterializer}
 import akka.stream.scaladsl.{Flow, Source}
 import upickle._
-import scalatags.Text.all._
 
 import proto._
 import crawler._
+import shared.Domain
 
 object Main extends App {
 
@@ -74,7 +74,7 @@ object Main extends App {
   val route =
     get {
       pathEndOrSingleSlash {
-        complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, Templates.index.render))
+        complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, Templates.index(Domain.providers.toList).render))
       } ~
         path("ws-echo") {
           handleWebSocketMessages(websocketHandler)
@@ -103,52 +103,4 @@ object Main extends App {
       println(s"Binding failed with ${e.getMessage}")
       system.terminate()
   }
-}
-
-object Templates {
-
-  def index =
-    html(
-      head(
-        title := "JobsScan",
-        link(
-          rel := "stylesheet",
-          href := "https://cdnjs.cloudflare.com/ajax/libs/materialize/0.97.7/css/materialize.min.css"
-        )
-      ),
-      body(
-        div(
-          cls := "container",
-          div(
-            cls := "row",
-            div(cls := "col s9", id := "header",
-              div(
-                cls := "row",
-                h1("JobsScan"), h6("a better way to find your dream job ~>")
-              ))
-          ),
-          div(
-            cls := "row",
-            div(cls := "col s9", id := "content",
-              div(
-                cls := "row",
-                div(cls := "col s6", input(id := "search-box", tpe := "text", name := "search")),
-                div(cls := "col s3", a("Search", id := "search-btn", cls := "waves-effect waves-light btn"))
-              ),
-              div(id := "providers", cls := "row", form(action := "#", for ((k, v) <- shared.Domain.providers.toList) yield {
-                p(
-                  input(tpe := "checkbox", value := k, id := k.toLowerCase),
-                  label(`for` := k.toLowerCase, k)
-                )
-              })),
-              div(id := "progress", cls := "row"),
-              div(id := "links", cls := "row")
-            )
-          )
-        ),
-        script(tpe := "text/javascript", src := "jobsscan-deps.js"),
-        script(tpe := "text/javascript", src := "jobsscan.js"),
-        script("new Client().main();", tpe := "text/javascript")
-      )
-    )
 }
