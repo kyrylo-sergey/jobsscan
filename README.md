@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/serhiip/jobsscan.svg?branch=master)](https://travis-ci.org/serhiip/jobsscan)
+
 ## Synopsis
 
 [http://proxima.pp.ua/jobsscan/](http://proxima.pp.ua/jobsscan/)
