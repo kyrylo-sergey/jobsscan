@@ -3,7 +3,7 @@ import scala.concurrent._
 import scala.concurrent.duration._
 import scala.io.StdIn
 import scala.util.{Success, Failure}
-import scala.language.implicitConversions
+import scala.language.{implicitConversions, postfixOps}
 import scala.collection.JavaConverters._
 
 import akka.actor.ActorSystem
@@ -18,12 +18,14 @@ import upickle._
 import proto._
 import crawler._
 import shared.Domain
+import cache.Cache
 
 object Main extends App {
 
   implicit val system = ActorSystem()
   implicit val materializer = ActorMaterializer()
   implicit val executionContext = system.dispatcher
+  val cache = Cache[Int, Set[Future[CrawlResult]]](1 hour)
 
   // TODO; handle streamed and binary messages
   def protoMessageFlow: Flow[Message, ProtoMessage, akka.NotUsed] =
@@ -50,7 +52,12 @@ object Main extends App {
           implicit def futureToSource[T](f: Future[T]): Source[T, akka.NotUsed] = Source.fromFuture(f)
 
           // TODO: remove blocking
-          val listOfScannedLinks = Await.result(Adapter(providers: _*)(5, keyword, scanner), 1 hour)
+          val listOfScannedLinks = cache.getOrElseUpdate(
+            (keyword, providers).##,
+            Await.result(Adapter(providers: _*)(5, keyword, scanner), 1 hour)
+          )
+
+          println(s"Cache size is ${cache.iterator.size}")
 
           println(s"Found ${listOfScannedLinks.size} candidates. Looking for $keyword in those")
 

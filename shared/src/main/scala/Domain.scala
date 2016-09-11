@@ -1,4 +1,5 @@
 package shared
+
 object Domain {
   final val YCombinator = "YCombinator"
   final val Rabotaua = "Rabotaua"
