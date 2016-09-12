@@ -69,8 +69,14 @@ object Main extends App {
             }
             .map { default.write(_) }
 
+          val completed = Future.sequence(listOfScannedLinks)
+            .map { items: Set[CrawlResult] =>
+              default.write(Msg.SEARCH_FINISHED -> default.write(SearchFinished(items.filter(_.isInstanceOf[CrawlSuccessful]).size)))
+            }
+
           List(TextMessage(default.write((Msg.CANDIDATES_COUNT, default.write(CandidatesCount(listOfScannedLinks.size)))))) ++
-            (listOfScannedLinks map { f: Future[CrawlResult] => TextMessage(futureURLToJson(f)) }).toList
+            (listOfScannedLinks map { f: Future[CrawlResult] => TextMessage(futureURLToJson(f)) }).toList ++
+            List(TextMessage(completed))
         }
         case NotSupported(msg) => List(TextMessage(s"not supported message: $msg"))
         case _ => List(TextMessage("unknown message type"))
@@ -87,10 +93,10 @@ object Main extends App {
           handleWebSocketMessages(websocketHandler)
         }
     } ~
-    pathPrefix("assets") {
-      getFromDirectory("jvm/src/main/webapp/assets/")
-    } ~
-    getFromResourceDirectory("")
+      pathPrefix("assets") {
+        getFromDirectory("jvm/src/main/webapp/assets/")
+      } ~
+      getFromResourceDirectory("")
 
   val env = System.getenv.asScala
   val host = env getOrElse ("JOBSSCANHOST", "localhost")

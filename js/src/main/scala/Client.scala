@@ -12,7 +12,6 @@ import upickle.default._
 import scala.concurrent.{Promise, Future}
 import scala.scalajs.concurrent.JSExecutionContext.Implicits.queue
 import scala.collection.mutable
-import scala.language.implicitConversions
 import scalatags.JsDom.all._
 
 import proto._
@@ -38,16 +37,18 @@ object Client extends JSApp {
 
       progress.flatMap(_.complete) onSuccess { case _ => conn.doClose }
 
-      conn.close onSuccess { case _ =>
-        Progress.remove
-        btn.removeClass("red")
-        btn.text("Search")
-        providers.attr("disabled", false)
+      conn.close onSuccess {
+        case _ =>
+          Progress.remove
+          btn.removeClass("red")
+          btn.text("Search")
+          providers.attr("disabled", false)
       }
 
-      conn.open onSuccess { case _ =>
-        Progress.show
-        providers.attr("disabled", true)
+      conn.open onSuccess {
+        case _ =>
+          Progress.show
+          providers.attr("disabled", true)
       }
 
       conn
@@ -60,6 +61,9 @@ object Client extends JSApp {
         .onMessage(Msg.CRAWL_UNSUCCESSFUL) {
           case cu: CrawlUnsuccessful =>
             progress foreach { _.progress }
+        }
+        .onMessage(Msg.SEARCH_FINISHED) {
+          case SearchFinished(count) => if (count == 0) links.html("Nothing was found")
         }
     }
 
@@ -79,7 +83,8 @@ object Client extends JSApp {
           if (btn.hasClass("red")) {
             btn.addClass("disabled")
             btn.text("Stopping")
-            connection.get.doClose onComplete { case _ =>
+            connection.get.doClose onComplete {
+              case _ =>
                 btn.removeClass("red")
                 btn.removeClass("disabled")
                 btn.text("Search")
@@ -138,6 +143,7 @@ class Connection(private val url: String) {
         case Msg.CANDIDATES_COUNT => read[CandidatesCount](msgBody)
         case Msg.CRAWL_SUCCESSFUL => read[CrawlSuccessful](msgBody)
         case Msg.CRAWL_UNSUCCESSFUL => read[CrawlUnsuccessful](msgBody)
+        case Msg.SEARCH_FINISHED => read[SearchFinished](msgBody)
       }
 
       onMessageCallbacks(messageType) foreach { _(messageInstance) }

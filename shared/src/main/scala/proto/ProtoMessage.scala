@@ -14,10 +14,12 @@ case class CrawlSuccessful(override val source: String, override val initialURL:
     extends CrawlResult(source, initialURL)
 case class CrawlUnsuccessful(override val source: String, override val initialURL: String, targetURL: String, reason: String)
     extends CrawlResult(source, initialURL)
+case class SearchFinished(successfulCount: Int) extends ProtoMessage
 
 object Msg {
   final val CANDIDATES_COUNT = "CandidatesCount"
   final val CRAWL_SUCCESSFUL = "CrawlSuccessful"
   final val CRAWL_UNSUCCESSFUL = "CrawlUnsuccessful"
   final val START_SEARCH = "StartSearch"
+  final val SEARCH_FINISHED = "SearchFinished"
 }
