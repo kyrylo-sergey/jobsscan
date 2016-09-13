@@ -13,6 +13,8 @@ import scala.concurrent.{Promise, Future}
 import scala.scalajs.concurrent.JSExecutionContext.Implicits.queue
 import scala.collection.mutable
 import scalatags.JsDom.all._
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 import proto._
 
@@ -25,6 +27,10 @@ object Client extends JSApp {
       td(a(cs.title, href := cs.targetURL, target := "_blank")),
       td(cs.foundText)
     ).render
+
+  implicit class MaterializeExt(val m: Materialize.type) extends AnyVal {
+      def toast(msg: String, dur: Duration): Unit = m.toast(msg, dur.toMillis)
+  }
 
   def main(): Unit = {
     val links = JQ("#links")
@@ -51,6 +57,10 @@ object Client extends JSApp {
           providers.attr("disabled", true)
       }
 
+      conn.searchFinished onSuccess {
+        case count => if (count == 0) links.html("Nothing was found")
+      }
+
       conn
         .onError { e: dom.Event => global.console.error("Error occured", e) }
         .onMessage(Msg.CRAWL_SUCCESSFUL) {
@@ -61,10 +71,16 @@ object Client extends JSApp {
         .onMessage(Msg.CRAWL_UNSUCCESSFUL) {
           case cu: CrawlUnsuccessful =>
             progress foreach { _.progress }
-        }
-        .onMessage(Msg.SEARCH_FINISHED) {
-          case SearchFinished(count) => if (count == 0) links.html("Nothing was found")
-        }
+      }
+
+      val messageFuture = for {
+         total <- conn.progressInfo
+         found <- conn.searchFinished
+      } yield s"Found $found job postings from $total scanned job postings"
+
+      messageFuture onSuccess { case msg =>
+          Materialize.toast(msg, 6 seconds)
+      }
     }
 
     def refreshResultsTable = {
@@ -83,19 +99,15 @@ object Client extends JSApp {
           if (btn.hasClass("red")) {
             btn.addClass("disabled")
             btn.text("Stopping")
+            Materialize.toast("Stopping will take a few seconds", 3 seconds)
             connection.get.doClose onComplete {
               case _ =>
                 btn.removeClass("red")
                 btn.removeClass("disabled")
                 btn.text("Search")
+                Materialize.toast("Stoped", 3 seconds)
             }
           } else {
-            btn.addClass("red")
-            btn.text("Stop")
-            val conn = new Connection(WSServer)
-            connection = Some(conn)
-            bindConnectionEvents(conn)
-            refreshResultsTable
             val idents: Seq[String] = providers
               .filter { el: dom.Element => JQ(el).prop("checked").asInstanceOf[Boolean] }
               .map { el: dom.Element => JQ(el).value() }
@@ -107,12 +119,33 @@ object Client extends JSApp {
                 global.console.error(s"expected HTMLInputElement, got $elem")
                 throw new RuntimeException()
             }
-            conn.send(Msg.START_SEARCH, write(StartSearch(term, idents)))
+            val keywordEntered = !term.trim.isEmpty()
+            val atLeastOneSourceSelected = idents.size > 0
+
+            if (keywordEntered && atLeastOneSourceSelected) {
+              btn.addClass("red")
+              btn.text("Stop")
+              val conn = new Connection(WSServer)
+              connection = Some(conn)
+              bindConnectionEvents(conn)
+              refreshResultsTable
+              Materialize.toast(s"Started a search for $term at ${idents.mkString(", ")}", 6 seconds)
+              conn.send(Msg.START_SEARCH, write(StartSearch(term, idents)))
+            } else {
+              if (!keywordEntered) Materialize.toast(s"Please enter a keyword", 3 seconds)
+              if (!atLeastOneSourceSelected) Materialize.toast(s"Please select some of the job sources", 3 seconds)
+            }
           }
         }
       })
     }
   }
+}
+
+
+@js.native
+object Materialize extends js.Object {
+  def toast(msg: String, millisDuration: Long): Unit = js.native
 }
 
 class Connection(private val url: String) {
@@ -124,12 +157,14 @@ class Connection(private val url: String) {
   private val closedPromise = Promise[dom.Event]()
   private val socketPromise = Promise[WebSocket]()
   private val progressPromise = Promise[Int]
+  private val searchFinishedPromise = Promise[Int]
   private val onMessageCallbacks: mutable.Map[String, List[MessageHandler]] =
     mutable.Map.empty withDefault { _ => List.empty }
   private val onErrorCallbacks: mutable.ListBuffer[ErrorHandler] =
     mutable.ListBuffer.empty
 
   onMessage(Msg.CANDIDATES_COUNT) { case CandidatesCount(c) => progressPromise success c }
+  onMessage(Msg.SEARCH_FINISHED) { case SearchFinished(c) => searchFinishedPromise success c}
 
   private def connect: WebSocket = {
     val socket = new WebSocket(url)
@@ -165,6 +200,8 @@ class Connection(private val url: String) {
   def close = closedPromise.future
 
   def progressInfo = progressPromise.future
+
+  def searchFinished = searchFinishedPromise.future
 
   def onMessage(messageType: String)(h: MessageHandler) = {
     onMessageCallbacks.update(messageType, h :: onMessageCallbacks(messageType))
