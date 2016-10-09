@@ -6,7 +6,8 @@ import scala.concurrent.duration.Duration
 
 object Cache {
   def apply[K, V](ttl: Duration, sizeForRemoveCheck: Int = 1000): Cache[K, V] =
-    new TTLCache(ttl, new InMemoryCache[K, (Long, V)])(() => currentTimeMillis(), sizeForRemoveCheck)
+    new TTLCache(ttl, new InMemoryCache[K, (Long, V)])(() =>
+      currentTimeMillis(), sizeForRemoveCheck)
 }
 
 trait Cache[K, V] {

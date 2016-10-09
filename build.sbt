@@ -18,21 +18,24 @@ lazy val jobsscan = crossProject.in(file(".")).
       "org.specs2" %% "specs2-core" % "3.8.3" % "test",
       "org.specs2" %% "specs2-mock" % "3.8.3" % "test",
       "com.lihaoyi" %%% "upickle" % "0.4.1",
-      "com.lihaoyi" %% "scalatags" % "0.6.0"
+      "com.lihaoyi" %% "scalatags" % "0.6.0",
+      "org.typelevel" %% "cats" % "0.7.2"
     )
   ).
   jsSettings(
     skip in packageJSDependencies := false,
     scalaJSUseRhino in Global := false,
-    libraryDependencies ++= Seq(
-      "org.scala-js" %%% "scalajs-dom" % "0.9.0",
-      "com.lihaoyi" %%% "upickle" % "0.4.1",
-      "be.doeraene" %%% "scalajs-jquery" % "0.9.0",
-      "com.lihaoyi" %%% "scalatags" % "0.6.0"
-    ),
+    libraryDependencies := {
+      libraryDependencies.value.filterNot(_.organization == "org.scoverage") ++ Seq(
+        "org.scala-js" %%% "scalajs-dom" % "0.9.0",
+        "com.lihaoyi" %%% "upickle" % "0.4.1",
+        "be.doeraene" %%% "scalajs-jquery" % "0.9.0",
+        "com.lihaoyi" %%% "scalatags" % "0.6.0"
+      )
+    },
     jsDependencies ++= Seq(
       RuntimeDOM,
-      "org.webjars" % "jquery" % "3.1.0" / "3.1.0/dist/jquery.min.js",
+      "org.webjars" % "jquery" % "3.1.1" / "3.1.1/dist/jquery.min.js",
       "org.webjars.bower" % "materialize" % "0.97.6" / "0.97.6/dist/js/materialize.min.js" dependsOn "dist/jquery.min.js"
     ),
     artifactPath in Compile in fastOptJS := (crossTarget in fastOptJS).value / ((moduleName in fastOptJS).value + ".js"),

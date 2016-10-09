@@ -1,24 +1,23 @@
 import scala._
+import scala.collection.JavaConverters._
 import scala.concurrent._
 import scala.concurrent.duration._
 import scala.io.StdIn
-import scala.util.{Success, Failure}
 import scala.language.{implicitConversions, postfixOps}
-import scala.collection.JavaConverters._
+import scala.util.{Failure, Success}
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity}
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
 import akka.http.scaladsl.server.Directives
-import akka.http.scaladsl.model.{HttpEntity, ContentTypes}
-import akka.stream.{ActorMaterializer}
+import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Source}
-import upickle._
-
-import proto._
-import crawler._
-import shared.Domain
 import cache.Cache
+import crawler._
+import proto._
+import shared.Domain
+import upickle._
 
 object Main extends App {
 
