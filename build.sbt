@@ -30,14 +30,32 @@ lazy val jobsscan = crossProject.in(file(".")).
         "org.scala-js" %%% "scalajs-dom" % "0.9.0",
         "com.lihaoyi" %%% "upickle" % "0.4.1",
         "be.doeraene" %%% "scalajs-jquery" % "0.9.0",
-        "com.lihaoyi" %%% "scalatags" % "0.6.0"
+        "com.lihaoyi" %%% "scalatags" % "0.6.0",
+        "com.github.japgolly.scalajs-react" %%% "core" % "0.11.2"
       )
     },
     jsDependencies ++= Seq(
       RuntimeDOM,
       "org.webjars" % "jquery" % "3.1.1" / "3.1.1/dist/jquery.min.js",
-      "org.webjars.bower" % "materialize" % "0.97.6" / "0.97.6/dist/js/materialize.min.js" dependsOn "dist/jquery.min.js"
-    ),
+      "org.webjars.bower" % "materialize" % "0.97.6" / "0.97.6/dist/js/materialize.min.js" dependsOn "dist/jquery.min.js",
+
+        "org.webjars.bower" % "react" % "15.3.2"
+        /        "react-with-addons.js"
+        minified "react-with-addons.min.js"
+        commonJSName "React",
+
+        "org.webjars.bower" % "react" % "15.3.2"
+          /         "react-dom.js"
+          minified  "react-dom.min.js"
+          dependsOn "react-with-addons.js"
+          commonJSName "ReactDOM",
+
+        "org.webjars.bower" % "react" % "15.3.2"
+          /         "react-dom-server.js"
+          minified  "react-dom-server.min.js"
+          dependsOn "react-dom.js"
+          commonJSName "ReactDOMServer"
+      ),
     artifactPath in Compile in fastOptJS := (crossTarget in fastOptJS).value / ((moduleName in fastOptJS).value + ".js"),
     artifactPath in Compile in fullOptJS := (crossTarget in fullOptJS).value / ((moduleName in fullOptJS).value + ".js"),
     artifactPath in Compile in packageJSDependencies :=
