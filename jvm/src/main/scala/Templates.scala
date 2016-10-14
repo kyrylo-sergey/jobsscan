@@ -40,7 +40,7 @@ object Templates {
         ),
         script(tpe := "text/javascript", src := "jobsscan-deps.js"),
         script(tpe := "text/javascript", src := "jobsscan.js"),
-        script("new Client().main();", tpe := "text/javascript")
+        script("new JobScaner().main();", tpe := "text/javascript")
       )
     )
 }

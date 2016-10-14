@@ -33,7 +33,10 @@ object Main extends App {
       .map { msg =>
         default.read[(String, String)](msg) match {
           //TODO: simplify this after https://issues.scala-lang.org/browse/SI-7046 is fixed
-          case (Msg.START_SEARCH, msg) => default.read[StartSearch](msg)
+          case (Msg.START_SEARCH, msg) => {
+            println(msg)
+            default.read[StartSearch](msg)
+          }
           case _ => NotSupported(msg)
         }
       }

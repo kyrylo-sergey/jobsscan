@@ -1,276 +1,186 @@
-import scala.scalajs.js.JSApp
-import org.scalajs.jquery.JQueryEventObject
+import scala.util.{Success, Failure}
+
 import org.scalajs.dom
 import org.scalajs.dom.raw._
-import org.scalajs.jquery.{jQuery => JQ, JQuery}
+import org.scalajs.dom.{WebSocket}
+import scala.scalajs.js.JSApp
 import scala.scalajs.js.Dynamic.global
-import scala.scalajs.js.timers._
-import scala.scalajs.js
-import org.scalajs.dom
 import dom.document
 import upickle.default._
-import scala.concurrent.{Promise, Future}
-import scala.scalajs.concurrent.JSExecutionContext.Implicits.queue
-import scala.collection.mutable
-import scalatags.JsDom.all._
-import scala.concurrent.duration._
-import scala.language.postfixOps
+import japgolly.scalajs.react.{ReactComponentB, ReactDOM, BackendScope, Callback, ReactEventI, CallbackTo}
+import japgolly.scalajs.react.FunctionalComponent._
+import japgolly.scalajs.react.vdom.prefix_<^._
 
 import proto._
+import shared.Domain
+import component.{Button, Progress, SourceSelector, ResultTable}
 
-object Client extends JSApp {
+object JobScaner extends JSApp {
+
   private final val WSServer = s"ws://${document.location.host}/ws-echo"
 
-  def appendCandidate(targetNode: JQuery, cs: CrawlSuccessful): Unit =
-    targetNode.find("table tbody") append tr(
-      td(a(cs.source, href := cs.initialURL, target := "_blank")),
-      td(a(cs.title, href := cs.targetURL, target := "_blank")),
-      td(cs.foundText)
-    ).render
+  object Main {
 
-  implicit class MaterializeExt(val m: Materialize.type) extends AnyVal {
-      def toast(msg: String, dur: Duration): Unit = m.toast(msg, dur.toMillis)
-  }
+    case class State(
+      ws: Option[WebSocket],
+      working: Boolean,
+      stopping: Boolean,
+      successfullCandidates: Vector[CrawlSuccessful],
+      failedCandidates: Vector[CrawlUnsuccessful],
+      searchTerm: String,
+      candidatesToReceive: Int,
+      selectedSources: Set[String]
+    ) {
+      def startSearch = copy(working = true, successfullCandidates = Vector(),
+        failedCandidates = Vector(), candidatesToReceive = 0)
 
-  def main(): Unit = {
-    val links = JQ("#links")
-    val btn = JQ("#search-btn")
-    val providers = JQ("#providers input")
-    var connection: Option[Connection] = None
+      def stopSearch = copy(working = false, stopping = true)
 
-    def bindConnectionEvents(conn: Connection) = {
-      val progress = conn.progressInfo.map(new Progress(_))
+      def totalReceived = successfullCandidates.length + failedCandidates.length
+    }
 
-      progress.flatMap(_.complete) onSuccess { case _ => conn.doClose }
+    private final val initialState = State(None, false, false, Vector(), Vector(), "", 0, Set(Domain.providers.keys.toSeq: _*))
 
-      conn.close onSuccess {
-        case _ =>
-          Progress.remove
-          btn.removeClass("red")
-          btn.text("Search")
-          providers.attr("disabled", false)
+    val component = ReactComponentB[Unit]("MainComponent")
+      .initialState(initialState)
+      .renderBackend[Main.Backend]
+      .componentDidMount(_.backend.start)
+      .componentWillUnmount(_.backend.end)
+      .build
+
+    class Backend($: BackendScope[Unit, State]) {
+      def render(s: State) = {
+        val percentage = if (s.candidatesToReceive > 0) Some((s.totalReceived.toDouble / s.candidatesToReceive) * 100) else None
+        val buttonTitle = if (s.working) "Stop" else if (s.stopping) "Stopping..." else "Search"
+
+        <.div(
+          <.div(
+            ^.cls := "row",
+            <.div(
+              ^.cls := "col s6",
+              <.input(^.id := "search-box", ^.tpe := "text", ^.name := "search", ^.value := s.searchTerm, ^.onChange ==> onChange)
+            ),
+            <.div(
+              ^.cls := "col s3",
+              Button() apply
+                Button.Props(buttonTitle, s.working, sendSearch(s))
+            )
+          ),
+          <.div(
+            ^.cls := "row",
+            if (s.working) Progress() apply Progress.Props(percentage) else ""
+          ),
+          SourceSelector() apply
+            SourceSelector.Props(Domain.providers, onSourceChange, s.selectedSources, s.working || s.stopping),
+          ResultTable() apply ResultTable.Props(s.successfullCandidates)
+        )
       }
 
-      conn.open onSuccess {
-        case _ =>
-          Progress.show
-          providers.attr("disabled", true)
+      import japgolly.scalajs.react.Callback._
+
+      val direct = $.accessDirect
+
+      def onChange(e: ReactEventI): Callback = {
+        val newSearchTerm = e.target.value
+        $.modState(_.copy(searchTerm = newSearchTerm)) >> reconnectOpt
       }
 
-      conn.searchFinished onSuccess {
-        case count => if (count == 0) links.html("Nothing was found")
+      def onSourceChange(e: ReactEventI): Callback = {
+        val id = e.target.id
+        $.modState { s: State =>
+          if (s.selectedSources contains id) s.copy(selectedSources = s.selectedSources - id)
+          else s.copy(selectedSources = s.selectedSources + id)
+        } >> reconnectOpt
       }
 
-      conn
-        .onError { e: dom.Event => global.console.error("Error occured", e) }
-        .onMessage(Msg.CRAWL_SUCCESSFUL) {
-          case cs: CrawlSuccessful =>
-            appendCandidate(links, cs)
-            progress foreach { _.progress }
+      def reconnectOpt(): Callback = $.state >>= { s: State => when(s.ws.isEmpty)(start) }
+
+      def handleMessage(msg: ProtoMessage) = msg match {
+        case CandidatesCount(count) => direct.modState(_ copy (candidatesToReceive = count))
+        case SearchFinished(succCount) => direct.modState(_ copy (working = false))
+        case cs @ CrawlSuccessful(_, _, _, _, _) =>
+          direct.modState(s => s.copy(successfullCandidates = s.successfullCandidates :+ cs))
+        case cu @ CrawlUnsuccessful(_, _, _, _) =>
+          direct.modState(s => s.copy(failedCandidates = s.failedCandidates :+ cu))
+      }
+
+      def sendSearch(s: State): Option[Callback] =
+        for (conn <- s.ws if s.searchTerm.nonEmpty && s.selectedSources.nonEmpty) yield {
+          if (s.working) $.modState(_.stopSearch) >> end
+          else $.modState(_.startSearch) >> sendSearch(conn, s.searchTerm, s.selectedSources)
         }
-        .onMessage(Msg.CRAWL_UNSUCCESSFUL) {
-          case cu: CrawlUnsuccessful =>
-            progress foreach { _.progress }
+
+      def sendSearch(conn: WebSocket, term: String, providers: Set[String]) = Callback apply {
+        conn.send(write(Msg.START_SEARCH -> write(StartSearch(term, providers.toSeq))))
       }
 
-      val messageFuture = for {
-         total <- conn.progressInfo
-         found <- conn.searchFinished
-      } yield s"Found $found job postings from $total scanned job postings"
+      def start: Callback = {
 
-      messageFuture onSuccess { case msg =>
-          Materialize.toast(msg, 6 seconds)
-      }
-    }
+        def connect = CallbackTo[WebSocket] {
 
-    def refreshResultsTable = {
-      links.html("")
+          def onopen(e: Event): Unit = global.console.log("Connected.")
 
-      val t = table(thead(
-        tr(th("Found At"), th("Link"), th("Found Text"))
-      ), tbody(), `class` := "responsive-table").render
-
-      links append t
-    }
-
-    JQ {
-      btn.on("click", { e: JQueryEventObject =>
-        if (!btn.hasClass("disabled")) {
-          if (btn.hasClass("red")) {
-            btn.addClass("disabled")
-            btn.text("Stopping")
-            Materialize.toast("Stopping will take a few seconds", 3 seconds)
-            connection.get.doClose onComplete {
-              case _ =>
-                btn.removeClass("red")
-                btn.removeClass("disabled")
-                btn.text("Search")
-                Materialize.toast("Stoped", 3 seconds)
+          def onmessage(e: MessageEvent): Unit = {
+            val (messageType, msgBody) = read[(String, String)](e.data.toString())
+            //TODO: simplify this after https://issues.scala-lang.org/browse/SI-7046 is fixed
+            handleMessage {
+              messageType match {
+                case Msg.CANDIDATES_COUNT => read[CandidatesCount](msgBody)
+                case Msg.CRAWL_SUCCESSFUL => read[CrawlSuccessful](msgBody)
+                case Msg.CRAWL_UNSUCCESSFUL => read[CrawlUnsuccessful](msgBody)
+                case Msg.SEARCH_FINISHED => read[SearchFinished](msgBody)
+                case other => {
+                  global.console.error(other)
+                  NotSupported(other)
+                }
+              }
             }
-          } else {
-            val idents: Seq[String] = providers
-              .filter { el: dom.Element => JQ(el).prop("checked").asInstanceOf[Boolean] }
-              .map { el: dom.Element => JQ(el).value() }
-              .asInstanceOf[js.Array[String]]
 
-            val term = document.getElementById("search-box") match {
-              case elem: HTMLInputElement => elem.value
-              case elem =>
-                global.console.error(s"expected HTMLInputElement, got $elem")
-                throw new RuntimeException()
-            }
-            val keywordEntered = !term.trim.isEmpty()
-            val atLeastOneSourceSelected = idents.size > 0
+          }
 
-            if (keywordEntered && atLeastOneSourceSelected) {
-              btn.addClass("red")
-              btn.text("Stop")
-              val conn = new Connection(WSServer)
-              connection = Some(conn)
-              bindConnectionEvents(conn)
-              refreshResultsTable
-              Materialize.toast(s"Started a search for $term at ${idents.mkString(", ")}", 6 seconds)
-              conn.send(Msg.START_SEARCH, write(StartSearch(term, idents)))
-            } else {
-              if (!keywordEntered) Materialize.toast(s"Please enter a keyword", 3 seconds)
-              if (!atLeastOneSourceSelected) Materialize.toast(s"Please select some of the job sources", 3 seconds)
-            }
+          def onerror(e: ErrorEvent): Unit = global.console.error(s"Error", e)
+
+          def onclose(e: CloseEvent): Unit = {
+            global.console.log(s"Closed", e)
+            direct.modState(s => s.copy(working = false, stopping = false, ws = None))
+          }
+
+          val ws = new WebSocket(WSServer)
+          ws.onopen = onopen _
+          ws.onclose = onclose _
+          ws.onmessage = onmessage _
+          ws.onerror = onerror _
+          ws
+        }
+
+        connect.attemptTry.flatMap {
+          case Success(ws) => {
+            global.console log s"Connecting to $WSServer..."
+            $.modState(_.copy(ws = Some(ws), working = false))
+          }
+          case Failure(error) => {
+            global.console error s"Error during connect to $WSServer"
+            $.modState(_.copy(working = false))
           }
         }
-      })
-    }
-  }
-}
-
-
-@js.native
-object Materialize extends js.Object {
-  def toast(msg: String, millisDuration: Long): Unit = js.native
-}
-
-class Connection(private val url: String) {
-
-  private type MessageHandler = PartialFunction[ProtoMessage, Unit]
-  private type ErrorHandler = dom.Event => Unit
-
-  private val openPromise = Promise[Any]()
-  private val closedPromise = Promise[dom.Event]()
-  private val socketPromise = Promise[WebSocket]()
-  private val progressPromise = Promise[Int]
-  private val searchFinishedPromise = Promise[Int]
-  private val onMessageCallbacks: mutable.Map[String, List[MessageHandler]] =
-    mutable.Map.empty withDefault { _ => List.empty }
-  private val onErrorCallbacks: mutable.ListBuffer[ErrorHandler] =
-    mutable.ListBuffer.empty
-
-  onMessage(Msg.CANDIDATES_COUNT) { case CandidatesCount(c) => progressPromise success c }
-  onMessage(Msg.SEARCH_FINISHED) { case SearchFinished(c) => searchFinishedPromise success c}
-
-  private def connect: WebSocket = {
-    val socket = new WebSocket(url)
-    socketPromise.success(socket)
-    socket.onopen = (e: Any) => openPromise.success(e)
-    socket.onclose = (e: dom.Event) => closedPromise.success(e)
-    socket.onmessage = (e: dom.MessageEvent) => {
-      val (messageType, msgBody) = read[(String, String)](e.data.toString())
-      //TODO: simplify this after https://issues.scala-lang.org/browse/SI-7046 is fixed
-      val messageInstance: ProtoMessage = messageType match {
-        case Msg.CANDIDATES_COUNT => read[CandidatesCount](msgBody)
-        case Msg.CRAWL_SUCCESSFUL => read[CrawlSuccessful](msgBody)
-        case Msg.CRAWL_UNSUCCESSFUL => read[CrawlUnsuccessful](msgBody)
-        case Msg.SEARCH_FINISHED => read[SearchFinished](msgBody)
       }
 
-      onMessageCallbacks(messageType) foreach { _(messageInstance) }
-    }
-    socket.onerror = (e: dom.Event) => onErrorCallbacks.toList foreach { _(e) }
+      def end: Callback = {
+        def closeWebSocket = $.state.map(_.ws.foreach(_.close()))
+        def clearWebSocket = $.modState(
+          _.copy(
+            ws = None,
+            successfullCandidates = Vector(),
+            failedCandidates = Vector()
+          )
+        )
 
-    socket
-  }
-
-  private def socket: Future[WebSocket] = {
-    if (!socketPromise.isCompleted) connect
-    // there is no point of having socket instance
-    // if it's connection is not yet opened
-    open flatMap { _ => socketPromise.future }
-  }
-
-  def open = openPromise.future
-
-  def close = closedPromise.future
-
-  def progressInfo = progressPromise.future
-
-  def searchFinished = searchFinishedPromise.future
-
-  def onMessage(messageType: String)(h: MessageHandler) = {
-    onMessageCallbacks.update(messageType, h :: onMessageCallbacks(messageType))
-    this
-  }
-
-  def onError(h: ErrorHandler) = { onErrorCallbacks += h; this }
-
-  def send(messageType: String, data: String) = socket foreach {
-    case socket: WebSocket => socket.send(write((messageType, data)))
-  }
-
-  def doClose = {
-    socket foreach { _.close() }
-    close
-  }
-}
-
-object Progress {
-
-  private def jqnode = JQ("#progress")
-
-  def isShown = jqnode.find(".progress").length == 1
-  def isDeterminate = jqnode.find("div.determinate").length == 1
-  def isIndeterminate = !isDeterminate
-
-  def show = if (!isShown) {
-    jqnode.append("""
-      <div class="progress">
-        <div class="indeterminate"></div>
-      </div>
-      """.stripMargin)
-  }
-
-  def progress(amount: Int): Unit = {
-    assert(amount <= 100)
-
-    val progress = jqnode.find(".progress").children().first
-
-    if (isShown) {
-      if (isIndeterminate) {
-        progress.removeClass("indeterminate").addClass("determinate")
+        closeWebSocket >> clearWebSocket
       }
 
-      progress.attr("style", s"width: $amount%")
     }
   }
 
-  def progress(amount: Double): Unit = progress(amount.toInt)
+  def main(): Unit = ReactDOM.render(Main.component("MainComponent"), document.getElementById("content"))
 
-  def remove = if (isShown) jqnode.find(".progress").remove()
-}
-
-class Progress(val totalMessages: Int) {
-  private var count = 0
-  private val completePromise = Promise[Unit]()
-
-  def progress = {
-    count += 1
-
-    Progress.progress(count.toDouble / totalMessages.toDouble * 100)
-
-    if (count == totalMessages) {
-      setTimeout(1000) {
-        Progress.remove
-        completePromise.success(Unit)
-      }
-    }
-  }
-
-  def complete = completePromise.future
 }
