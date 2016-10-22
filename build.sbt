@@ -30,7 +30,6 @@ lazy val jobsscan = crossProject.in(file(".")).
         "org.scala-js" %%% "scalajs-dom" % "0.9.0",
         "com.lihaoyi" %%% "upickle" % "0.4.1",
         "be.doeraene" %%% "scalajs-jquery" % "0.9.0",
-        "com.lihaoyi" %%% "scalatags" % "0.6.0",
         "com.github.japgolly.scalajs-react" %%% "core" % "0.11.2"
       )
     },
