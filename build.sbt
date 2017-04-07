@@ -9,7 +9,11 @@ lazy val jobsscan = crossProject.in(file(".")).
     version := "0.1-SNAPSHOT",
     publish := {},
     publishLocal := {},
-    resolvers += "webjars" at "http://webjars.github.com/m2"
+    resolvers += "webjars" at "http://webjars.github.com/m2",
+    libraryDependencies ++= Seq(
+        "org.typelevel" %%% "cats" % "0.9.0",
+        "com.lihaoyi" %%% "upickle" % "0.4.1"
+        )
   ).
   jvmSettings(
     libraryDependencies ++= Seq(
@@ -17,9 +21,7 @@ lazy val jobsscan = crossProject.in(file(".")).
       "com.typesafe.akka" %% "akka-http-experimental" % "2.4.9-RC1",
       "org.specs2" %% "specs2-core" % "3.8.3" % "test",
       "org.specs2" %% "specs2-mock" % "3.8.3" % "test",
-      "com.lihaoyi" %%% "upickle" % "0.4.1",
-      "com.lihaoyi" %% "scalatags" % "0.6.0",
-      "org.typelevel" %% "cats" % "0.7.2"
+      "com.lihaoyi" %% "scalatags" % "0.6.0"
     )
   ).
   jsSettings(
@@ -28,15 +30,14 @@ lazy val jobsscan = crossProject.in(file(".")).
     libraryDependencies := {
       libraryDependencies.value.filterNot(_.organization == "org.scoverage") ++ Seq(
         "org.scala-js" %%% "scalajs-dom" % "0.9.0",
-        "com.lihaoyi" %%% "upickle" % "0.4.1",
         "be.doeraene" %%% "scalajs-jquery" % "0.9.0",
         "com.github.japgolly.scalajs-react" %%% "core" % "0.11.2"
       )
     },
     jsDependencies ++= Seq(
       RuntimeDOM,
-      "org.webjars" % "jquery" % "3.1.1" / "3.1.1/dist/jquery.min.js",
-      "org.webjars.bower" % "materialize" % "0.97.6" / "0.97.6/dist/js/materialize.min.js" dependsOn "dist/jquery.min.js",
+      "org.webjars" % "jquery" % "3.2.0" / "3.2.0/jquery.min.js",
+      "org.webjars.bower" % "materialize" % "0.98.0" / "0.98.0/dist/js/materialize.min.js" dependsOn "3.2.0/jquery.min.js",
 
         "org.webjars.bower" % "react" % "15.3.2"
         /        "react-with-addons.js"
