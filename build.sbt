@@ -1,6 +1,7 @@
+
 import NativePackagerHelper._
 
-scalaVersion in ThisBuild := "2.11.8"
+scalaVersion in ThisBuild := "2.12.2"
 
 lazy val jobsscan = crossProject.in(file(".")).
   enablePlugins(JavaAppPackaging).
@@ -12,16 +13,16 @@ lazy val jobsscan = crossProject.in(file(".")).
     resolvers += "webjars" at "http://webjars.github.com/m2",
     libraryDependencies ++= Seq(
         "org.typelevel" %%% "cats" % "0.9.0",
-        "com.lihaoyi" %%% "upickle" % "0.4.1"
+        "com.lihaoyi" %%% "upickle" % "0.4.4"
         )
   ).
   jvmSettings(
     libraryDependencies ++= Seq(
-      "net.ruippeixotog" %% "scala-scraper" % "1.0.0",
-      "com.typesafe.akka" %% "akka-http-experimental" % "2.4.9-RC1",
-      "org.specs2" %% "specs2-core" % "3.8.3" % "test",
-      "org.specs2" %% "specs2-mock" % "3.8.3" % "test",
-      "com.lihaoyi" %% "scalatags" % "0.6.0"
+      "net.ruippeixotog" %% "scala-scraper" % "1.2.0",
+      "com.typesafe.akka" %% "akka-http" % "10.0.5",
+      "org.specs2" %% "specs2-core" % "3.8.9" % "test",
+      "org.specs2" %% "specs2-mock" % "3.8.9" % "test",
+      "com.lihaoyi" %% "scalatags" % "0.6.5"
     )
   ).
   jsSettings(
@@ -29,9 +30,9 @@ lazy val jobsscan = crossProject.in(file(".")).
     scalaJSUseRhino in Global := false,
     libraryDependencies := {
       libraryDependencies.value.filterNot(_.organization == "org.scoverage") ++ Seq(
-        "org.scala-js" %%% "scalajs-dom" % "0.9.0",
-        "be.doeraene" %%% "scalajs-jquery" % "0.9.0",
-        "com.github.japgolly.scalajs-react" %%% "core" % "0.11.2"
+        "org.scala-js" %%% "scalajs-dom" % "0.9.1",
+        "be.doeraene" %%% "scalajs-jquery" % "0.9.1",
+        "com.github.japgolly.scalajs-react" %%% "core" % "0.11.3"
       )
     },
     jsDependencies ++= Seq(
