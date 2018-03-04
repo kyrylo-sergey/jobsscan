@@ -1,6 +1,7 @@
+
 import NativePackagerHelper._
 
-scalaVersion in ThisBuild := "2.11.8"
+scalaVersion in ThisBuild := "2.12.2"
 
 lazy val jobsscan = crossProject.in(file(".")).
   enablePlugins(JavaAppPackaging).
@@ -9,17 +10,19 @@ lazy val jobsscan = crossProject.in(file(".")).
     version := "0.1-SNAPSHOT",
     publish := {},
     publishLocal := {},
-    resolvers += "webjars" at "http://webjars.github.com/m2"
+    resolvers += "webjars" at "http://webjars.github.com/m2",
+    libraryDependencies ++= Seq(
+        "org.typelevel" %%% "cats" % "0.9.0",
+        "com.lihaoyi" %%% "upickle" % "0.4.4"
+        )
   ).
   jvmSettings(
     libraryDependencies ++= Seq(
-      "net.ruippeixotog" %% "scala-scraper" % "1.0.0",
-      "com.typesafe.akka" %% "akka-http-experimental" % "2.4.9-RC1",
-      "org.specs2" %% "specs2-core" % "3.8.3" % "test",
-      "org.specs2" %% "specs2-mock" % "3.8.3" % "test",
-      "com.lihaoyi" %%% "upickle" % "0.4.1",
-      "com.lihaoyi" %% "scalatags" % "0.6.0",
-      "org.typelevel" %% "cats" % "0.7.2"
+      "net.ruippeixotog" %% "scala-scraper" % "1.2.0",
+      "com.typesafe.akka" %% "akka-http" % "10.0.5",
+      "org.specs2" %% "specs2-core" % "3.8.9" % "test",
+      "org.specs2" %% "specs2-mock" % "3.8.9" % "test",
+      "com.lihaoyi" %% "scalatags" % "0.6.5"
     )
   ).
   jsSettings(
@@ -27,17 +30,33 @@ lazy val jobsscan = crossProject.in(file(".")).
     scalaJSUseRhino in Global := false,
     libraryDependencies := {
       libraryDependencies.value.filterNot(_.organization == "org.scoverage") ++ Seq(
-        "org.scala-js" %%% "scalajs-dom" % "0.9.0",
-        "com.lihaoyi" %%% "upickle" % "0.4.1",
-        "be.doeraene" %%% "scalajs-jquery" % "0.9.0",
-        "com.lihaoyi" %%% "scalatags" % "0.6.0"
+        "org.scala-js" %%% "scalajs-dom" % "0.9.1",
+        "be.doeraene" %%% "scalajs-jquery" % "0.9.1",
+        "com.github.japgolly.scalajs-react" %%% "core" % "0.11.3"
       )
     },
     jsDependencies ++= Seq(
       RuntimeDOM,
-      "org.webjars" % "jquery" % "3.1.1" / "3.1.1/dist/jquery.min.js",
-      "org.webjars.bower" % "materialize" % "0.97.6" / "0.97.6/dist/js/materialize.min.js" dependsOn "dist/jquery.min.js"
-    ),
+      "org.webjars" % "jquery" % "3.2.0" / "3.2.0/jquery.min.js",
+      "org.webjars.bower" % "materialize" % "0.98.0" / "0.98.0/dist/js/materialize.min.js" dependsOn "3.2.0/jquery.min.js",
+
+        "org.webjars.bower" % "react" % "15.3.2"
+        /        "react-with-addons.js"
+        minified "react-with-addons.min.js"
+        commonJSName "React",
+
+        "org.webjars.bower" % "react" % "15.3.2"
+          /         "react-dom.js"
+          minified  "react-dom.min.js"
+          dependsOn "react-with-addons.js"
+          commonJSName "ReactDOM",
+
+        "org.webjars.bower" % "react" % "15.3.2"
+          /         "react-dom-server.js"
+          minified  "react-dom-server.min.js"
+          dependsOn "react-dom.js"
+          commonJSName "ReactDOMServer"
+      ),
     artifactPath in Compile in fastOptJS := (crossTarget in fastOptJS).value / ((moduleName in fastOptJS).value + ".js"),
     artifactPath in Compile in fullOptJS := (crossTarget in fullOptJS).value / ((moduleName in fullOptJS).value + ".js"),
     artifactPath in Compile in packageJSDependencies :=

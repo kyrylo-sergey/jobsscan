@@ -24,23 +24,12 @@ object Templates {
           ),
           div(
             cls := "row",
-            div(cls := "col s9", id := "content",
-              div(
-                cls := "row",
-                div(cls := "col s6", input(id := "search-box", tpe := "text", name := "search")),
-                div(cls := "col s3", a("Search", id := "search-btn", cls := "waves-effect waves-light btn"))
-              ),
-              div(id := "providers", cls := "row", for ((k, v) <- providers) yield {
-                p(input(tpe := "checkbox", value := k, id := k), label(`for` := k, k))
-              }),
-              div(id := "progress", cls := "row"),
-              div(id := "links", cls := "row")
-            )
+            div(cls := "col s9", id := "content")
           )
         ),
         script(tpe := "text/javascript", src := "jobsscan-deps.js"),
         script(tpe := "text/javascript", src := "jobsscan.js"),
-        script("new Client().main();", tpe := "text/javascript")
+        script("new JobScaner().main();", tpe := "text/javascript")
       )
     )
 }
